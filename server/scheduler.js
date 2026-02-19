@@ -19,6 +19,34 @@ async function writeTasks(data) {
   await fs.writeFile(TASKS_PATH, JSON.stringify(data, null, 2));
 }
 
+// Auto-assign agent based on task title/description keywords
+function autoAssign(task, roles) {
+  const text = `${task.title} ${task.description || ''}`.toLowerCase();
+
+  // Coding keywords
+  const codeWords = ['code', 'fix', 'bug', 'refactor', 'build', 'add feature', 'implement', 'create page', 'update ui', 'css', 'html', 'component', 'endpoint', 'api', 'deploy', 'design', 'redesign', 'layout', 'style', 'button', 'modal', 'page', 'dark mode', 'light mode', 'theme'];
+  // QA/test keywords
+  const testWords = ['test', 'review', 'qa', 'check', 'audit', 'verify', 'validate', 'inspect'];
+  // Research keywords
+  const researchWords = ['research', 'search', 'find', 'look up', 'analyze', 'compare', 'data', 'fetch', 'scrape'];
+  // Match keywords
+  const matchWords = ['match', 'score', 'fixture', 'tournament', 'league', 'football', 'cs2', 'dota', 'ufc', 'sports'];
+  // YouTube keywords
+  const youtubeWords = ['youtube', 'video', 'channel', 'subscribe', 'tube'];
+
+  const has = (words) => words.some(w => text.includes(w));
+
+  let roleId = 'coding'; // default to coding
+  if (has(testWords)) roleId = 'tester';
+  else if (has(researchWords)) roleId = 'research';
+  else if (has(matchWords)) roleId = 'matches';
+  else if (has(youtubeWords)) roleId = 'youtube';
+  else if (has(codeWords)) roleId = 'coding';
+
+  const role = roles.find(r => r.id === roleId);
+  return role || roles.find(r => r.id === 'coding') || (roles.length > 0 ? roles[0] : null);
+}
+
 async function tick() {
   try {
     const data = await readJSON(TASKS_PATH);
@@ -39,6 +67,20 @@ async function tick() {
     }
 
     let changed = false;
+
+    // Auto-assign tasks that have no agent
+    for (const task of data.tasks) {
+      if ((task.status === 'inbox' || task.status === 'assigned') && !task.assignedTo) {
+        const agent = autoAssign(task, roles);
+        if (agent) {
+          task.assignedTo = agent.id;
+          task.model = agent.model;
+          task.updatedAt = now;
+          changed = true;
+          console.log(`[scheduler] Auto-assigned task #${task.id} "${task.title}" → ${agent.id}`);
+        }
+      }
+    }
 
     // Pick up inbox/assigned tasks if their agent isn't busy
     for (const task of data.tasks) {

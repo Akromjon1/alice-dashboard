@@ -637,7 +637,7 @@ export default function MissionControl() {
                   width: '100%', padding: '10px 12px', background: 'var(--bg)', border: '1px solid var(--border)',
                   borderRadius: 8, color: 'var(--text)', fontSize: 14, outline: 'none', fontFamily: 'Fira Sans, sans-serif',
                 }}>
-                  <option value="">Select agent</option>
+                  <option value="">🤖 Auto-assign (smart)</option>
                   {roles.map(r => <option key={r.id} value={r.id}>{r.icon} {r.name}</option>)}
                 </select>
               </div>
@@ -695,7 +695,7 @@ export default function MissionControl() {
                   width: '100%', padding: '10px 12px', background: 'var(--bg)', border: '1px solid var(--border)',
                   borderRadius: 8, color: 'var(--text)', fontSize: 14, outline: 'none', fontFamily: 'Fira Sans, sans-serif',
                 }}>
-                  <option value="">Select agent</option>
+                  <option value="">🤖 Auto-assign (smart)</option>
                   {roles.map(r => <option key={r.id} value={r.id}>{r.icon} {r.name}</option>)}
                 </select>
               </div>
