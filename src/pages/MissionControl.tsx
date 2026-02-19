@@ -1,6 +1,6 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { getAgents, getActivity, getPipelineStatus, getTasks, createTask, updateTask, patchTask, deleteTaskApi, getModelRoles } from '../api';
-import { Radio, Users, ListTodo, Plus, Activity, CheckCircle, XCircle, Loader, Trash2, Search, Edit3, AlertTriangle, RefreshCw } from 'lucide-react';
+import { Radio, ListTodo, Plus, Activity, CheckCircle, XCircle, Trash2, Search, Edit3, AlertTriangle, RefreshCw } from 'lucide-react';
 import { timeAgo, getModelTier } from '../utils';
 import { usePolling } from '../hooks/usePolling';
 import { useToast } from '../contexts/ToastContext';
@@ -18,8 +18,6 @@ const COLUMNS: { id: Task['status']; label: string }[] = [
   { id: 'done', label: 'DONE' },
 ];
 
-const STATUS_COLORS: Record<string, string> = { WORKING: 'var(--green)', IDLE: 'var(--yellow)', OFFLINE: 'var(--text-muted)' };
-const BADGE_COLORS: Record<string, string> = { LEAD: '#F59E0B', INT: '#3B82F6', SPC: '#8B5CF6' };
 const PRIORITY_COLORS: Record<string, string> = { high: 'var(--red)', medium: 'var(--yellow)', low: 'var(--green)' };
 const MODEL_COLORS: Record<string, string> = { opus: '#F59E0B', sonnet: '#3B82F6', haiku: '#10B981', local: '#6B7280' };
 const SOURCE_ICONS: Record<string, string> = { telegram: '📱', dashboard: '🖥️', pipeline: '⚙️' };
@@ -42,6 +40,7 @@ export default function MissionControl() {
   const rolesRef = useRef<RoleInfo[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [activityExpanded, setActivityExpanded] = useState(false);
 
   // Search & Filter
   const [searchQuery, setSearchQuery] = useState('');
@@ -208,9 +207,15 @@ export default function MissionControl() {
 
   const getRoleInfo = (assignedTo: string): RoleInfo | undefined => rolesRef.current.find(r => r.id === assignedTo);
 
+  // Find current task for a working agent
+  const getAgentCurrentTask = (agentName: string): string | undefined => {
+    const running = activities.find(a => a.status === 'running' && a.agent.toLowerCase() === agentName.toLowerCase());
+    return running?.task;
+  };
+
   if (loading) {
     return (
-      <>
+      <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
         <div className="main-header" style={{ justifyContent: 'space-between' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
             <span style={{ fontSize: 18 }}>◇</span>
@@ -220,13 +225,13 @@ export default function MissionControl() {
         <div className="main-content">
           <LoadingSkeleton count={4} />
         </div>
-      </>
+      </div>
     );
   }
 
   if (error && tasks.length === 0) {
     return (
-      <>
+      <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
         <div className="main-header" style={{ justifyContent: 'space-between' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
             <span style={{ fontSize: 18 }}>◇</span>
@@ -247,18 +252,20 @@ export default function MissionControl() {
             </button>
           </div>
         </div>
-      </>
+      </div>
     );
   }
 
+  const activityBarHeight = activityExpanded ? 240 : 40;
+
   return (
-    <>
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
       {/* Pipeline Banner */}
       {pipeline.active && (
         <div style={{
           padding: '10px 20px', background: 'linear-gradient(90deg, var(--accent-bg) 0%, var(--green-bg) 100%)',
           borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 10,
-          fontFamily: 'Fira Code, monospace', fontSize: 13,
+          fontFamily: 'Fira Code, monospace', fontSize: 13, flexShrink: 0,
         }}>
           {pipeline.stage === 'complete' ? (
             <><span>✅</span><span style={{ color: 'var(--green)' }}>Pipeline Complete:</span><span>{pipeline.task}</span>
@@ -277,23 +284,27 @@ export default function MissionControl() {
       )}
 
       {/* Header */}
-      <div className="main-header" style={{ justifyContent: 'space-between' }}>
+      <div className="main-header" style={{ justifyContent: 'space-between', flexShrink: 0 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           <span style={{ fontSize: 18 }}>◇</span>
           <span style={{ fontFamily: 'Fira Code, monospace', fontWeight: 700, letterSpacing: 1 }}>MISSION CONTROL</span>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 24 }}>
-          <div style={{ textAlign: 'center' }}>
-            <div style={{ fontFamily: 'Fira Code, monospace', fontSize: 24, fontWeight: 700 }}>{stats.agents}</div>
-            <div style={{ fontSize: 10, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 1 }}>Agents Active</div>
-          </div>
-          <div style={{ textAlign: 'center' }}>
-            <div style={{ fontFamily: 'Fira Code, monospace', fontSize: 24, fontWeight: 700, color: stats.running > 0 ? 'var(--green)' : 'var(--text)' }}>{stats.running}</div>
-            <div style={{ fontSize: 10, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 1 }}>Running Now</div>
-          </div>
-          <div style={{ textAlign: 'center' }}>
-            <div style={{ fontFamily: 'Fira Code, monospace', fontSize: 24, fontWeight: 700 }}>{stats.tasks}</div>
-            <div style={{ fontSize: 10, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 1 }}>Tasks</div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+              <span style={{ fontFamily: 'Fira Code, monospace', fontSize: 18, fontWeight: 700 }}>{stats.agents}</span>
+              <span style={{ fontSize: 9, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 0.5 }}>Active</span>
+            </div>
+            <div style={{ width: 1, height: 20, background: 'var(--border)' }} />
+            <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+              <span style={{ fontFamily: 'Fira Code, monospace', fontSize: 18, fontWeight: 700, color: stats.running > 0 ? 'var(--green)' : 'var(--text)' }}>{stats.running}</span>
+              <span style={{ fontSize: 9, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 0.5 }}>Running</span>
+            </div>
+            <div style={{ width: 1, height: 20, background: 'var(--border)' }} />
+            <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+              <span style={{ fontFamily: 'Fira Code, monospace', fontSize: 18, fontWeight: 700 }}>{stats.tasks}</span>
+              <span style={{ fontSize: 9, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 0.5 }}>Tasks</span>
+            </div>
           </div>
           <button onClick={() => setShowAdd(true)} style={{
             padding: '8px 16px', background: 'var(--accent)', color: 'white',
@@ -305,10 +316,10 @@ export default function MissionControl() {
         </div>
       </div>
 
-      {/* Search & Filter Bar */}
+      {/* Search & Filter Bar + Agent Indicators */}
       <div style={{
         padding: '10px 16px', borderBottom: '1px solid var(--border)',
-        display: 'flex', alignItems: 'center', gap: 12, background: 'var(--bg-card)',
+        display: 'flex', alignItems: 'center', gap: 12, background: 'var(--bg-card)', flexShrink: 0,
       }}>
         <div style={{ position: 'relative', flex: 1, maxWidth: 400 }}>
           <Search size={14} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
@@ -333,172 +344,153 @@ export default function MissionControl() {
             {mode === 'all' ? 'All' : mode === 'high' ? '🔴 High Priority' : '👤 My Agent'}
           </button>
         ))}
-      </div>
 
-      <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
-        {/* Agents Sidebar */}
-        <div style={{
-          width: 220, borderRight: '1px solid var(--border)', padding: '16px 0',
-          overflowY: 'auto', background: 'var(--bg-card)', flexShrink: 0,
-        }}>
-          <div style={{ padding: '0 16px 12px', fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 1, display: 'flex', alignItems: 'center', gap: 6 }}>
-            <Users size={12} /> Agents <span style={{ marginLeft: 'auto', color: 'var(--text-muted)' }}>{agents.length}</span>
-          </div>
+        {/* Agent status indicators */}
+        <div style={{ width: 1, height: 24, background: 'var(--border)', marginLeft: 4 }} />
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
           {agents.map(agent => {
             const working = isAgentWorking(agent.name);
+            const currentTask = getAgentCurrentTask(agent.name);
             return (
-              <div key={agent.id} style={{
-                padding: '10px 16px', display: 'flex', alignItems: 'center', gap: 10,
-                cursor: 'pointer', transition: 'background 0.15s',
-                background: working ? 'var(--green-bg)' : 'transparent',
-              }}
-                onMouseEnter={e => (e.currentTarget.style.background = working ? 'var(--green-bg)' : 'var(--bg-card-hover)')}
-                onMouseLeave={e => (e.currentTarget.style.background = working ? 'var(--green-bg)' : 'transparent')}
-              >
+              <div key={agent.id} title={`${agent.name}${currentTask ? '\n📋 ' + currentTask : ''}`} style={{
+                width: 30, height: 30, borderRadius: '50%', background: 'var(--border)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                fontSize: 14, position: 'relative', cursor: 'default',
+                opacity: working ? 1 : 0.5,
+              }}>
+                {agent.icon}
                 <div style={{
-                  width: 32, height: 32, borderRadius: '50%', background: 'var(--border)',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  fontSize: 16, position: 'relative',
-                }}>
-                  {agent.icon}
-                  <div style={{
-                    position: 'absolute', bottom: -1, right: -1, width: 10, height: 10,
-                    borderRadius: '50%', background: working ? 'var(--green)' : STATUS_COLORS[agent.status],
-                    border: '2px solid var(--bg-card)',
-                    animation: working ? 'pulse 1.5s ease-in-out infinite' : 'none',
-                  }} />
-                </div>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                    <span style={{ fontSize: 13, fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{agent.name}</span>
-                    <span style={{
-                      fontSize: 9, padding: '1px 5px', borderRadius: 4, fontWeight: 700,
-                      background: BADGE_COLORS[agent.badge] + '22', color: BADGE_COLORS[agent.badge],
-                    }}>{agent.badge}</span>
-                  </div>
-                  <div style={{ fontSize: 11, color: 'var(--text-muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                    {working ? '⚡ Working...' : agent.role}
-                  </div>
-                </div>
-                {working && <Loader size={12} style={{ color: 'var(--green)', animation: 'spin 1s linear infinite' }} />}
+                  position: 'absolute', bottom: -1, right: -1, width: 9, height: 9,
+                  borderRadius: '50%', background: working ? 'var(--green)' : 'var(--text-muted)',
+                  border: '2px solid var(--bg-card)',
+                  animation: working ? 'pulse 1.5s ease-in-out infinite' : 'none',
+                }} />
               </div>
             );
           })}
         </div>
+      </div>
 
-        {/* Kanban Board */}
-        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-          <div style={{ flex: 1, display: 'flex', gap: 1, overflowX: 'auto', padding: '16px 12px', background: 'var(--bg)' }}>
-            {COLUMNS.map(col => (
-              <div key={col.id} style={{ flex: 1, minWidth: 200, display: 'flex', flexDirection: 'column' }}
-                onDragOver={e => e.preventDefault()} onDrop={() => handleDrop(col.id)}>
-                <div style={{
-                  padding: '8px 12px', fontSize: 11, fontWeight: 700, color: 'var(--text-muted)',
-                  textTransform: 'uppercase', letterSpacing: 1, display: 'flex', alignItems: 'center', gap: 6,
-                  borderBottom: `2px solid ${col.id === 'in_progress' ? 'var(--accent)' : col.id === 'done' ? 'var(--green)' : 'var(--border)'}`,
-                  marginBottom: 8,
-                }}>
-                  <ListTodo size={12} /> {col.label}
-                  <span style={{ marginLeft: 'auto', background: 'var(--border)', padding: '1px 6px', borderRadius: 4, fontSize: 10 }}>
-                    {columnTasks(col.id).length}
-                  </span>
-                </div>
-                <div style={{ flex: 1, overflowY: 'auto', padding: '0 4px' }}>
-                  {columnTasks(col.id).map(task => {
-                    const role = getRoleInfo(task.assignedTo);
-                    const tier = getModelTier(task.model);
-                    const isInProgress = task.status === 'in_progress';
-                    const isFailed = task.status === 'failed';
-                    return (
-                      <div key={task.id} draggable onDragStart={() => handleDragStart(task.id)}
-                        onClick={() => openEditModal(task)}
-                        style={{
-                          background: 'var(--bg-card)',
-                          border: isFailed ? '1px solid var(--red)' : '1px solid var(--border)',
-                          borderRadius: 8, padding: 12, marginBottom: 8, cursor: 'pointer',
-                          borderLeft: `3px solid ${PRIORITY_COLORS[task.priority]}`,
-                          transition: 'box-shadow 0.15s',
-                          animation: isInProgress ? 'taskPulse 2s ease-in-out infinite' : 'none',
-                        }}
-                        onMouseEnter={e => (e.currentTarget.style.boxShadow = 'var(--shadow-lg)')}
-                        onMouseLeave={e => (e.currentTarget.style.boxShadow = 'none')}
-                      >
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                          <div style={{ fontSize: 13, fontWeight: 600, lineHeight: 1.4, flex: 1 }}>{task.title}</div>
-                          <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
-                            <button onClick={e => { e.stopPropagation(); openEditModal(task); }} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: 2 }}><Edit3 size={12} /></button>
-                            <button onClick={e => { e.stopPropagation(); confirmRemoveTask(task.id); }} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: 2 }}><Trash2 size={12} /></button>
-                          </div>
-                        </div>
-
-                        {task.description && (
-                          <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4, lineHeight: 1.4 }}>
-                            {task.description.slice(0, 80)}{task.description.length > 80 ? '...' : ''}
-                          </div>
-                        )}
-
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 8 }}>
-                          {role && (
-                            <>
-                              <span style={{ fontSize: 14 }}>{role.icon}</span>
-                              <span style={{ fontSize: 11, fontWeight: 600 }}>{role.name}</span>
-                            </>
-                          )}
-                          {task.model && (
-                            <span style={{
-                              fontSize: 9, padding: '1px 6px', borderRadius: 4, fontWeight: 700, fontFamily: 'Fira Code, monospace',
-                              background: (MODEL_COLORS[tier] || MODEL_COLORS.local) + '22',
-                              color: MODEL_COLORS[tier] || MODEL_COLORS.local,
-                            }}>{tier}</span>
-                          )}
-                        </div>
-
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 8 }}>
-                          <PriorityBadge priority={task.priority} />
-                          <span style={{ fontSize: 10 }}>{SOURCE_ICONS[task.source] || '📋'}</span>
-                          <span style={{ fontSize: 10, color: 'var(--text-muted)', fontFamily: 'Fira Code, monospace', marginLeft: 'auto' }}>
-                            {timeAgo(task.createdAt)}
-                          </span>
-                        </div>
-
-                        {task.result && (
-                          <div style={{ fontSize: 10, color: 'var(--green)', marginTop: 6, fontStyle: 'italic' }}>
-                            ✓ {task.result.slice(0, 60)}{task.result.length > 60 ? '...' : ''}
-                          </div>
-                        )}
+      {/* Kanban Board - Full Width */}
+      <div style={{ flex: 1, display: 'flex', gap: 1, overflowX: 'auto', padding: '16px 12px', background: 'var(--bg)' }}>
+        {COLUMNS.map(col => (
+          <div key={col.id} style={{ flex: 1, minWidth: 200, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}
+            onDragOver={e => e.preventDefault()} onDrop={() => handleDrop(col.id)}>
+            <div style={{
+              padding: '8px 12px', fontSize: 11, fontWeight: 700, color: 'var(--text-muted)',
+              textTransform: 'uppercase', letterSpacing: 1, display: 'flex', alignItems: 'center', gap: 6,
+              borderBottom: `2px solid ${col.id === 'in_progress' ? 'var(--accent)' : col.id === 'done' ? 'var(--green)' : 'var(--border)'}`,
+              marginBottom: 8, flexShrink: 0,
+            }}>
+              <ListTodo size={12} /> {col.label}
+              <span style={{ marginLeft: 'auto', background: 'var(--border)', padding: '1px 6px', borderRadius: 4, fontSize: 10 }}>
+                {columnTasks(col.id).length}
+              </span>
+            </div>
+            <div style={{ flex: 1, overflowY: 'auto', padding: '0 4px' }}>
+              {columnTasks(col.id).map(task => {
+                const role = getRoleInfo(task.assignedTo);
+                const tier = getModelTier(task.model);
+                const isInProgress = task.status === 'in_progress';
+                const isFailed = task.status === 'failed';
+                return (
+                  <div key={task.id} draggable onDragStart={() => handleDragStart(task.id)}
+                    onClick={() => openEditModal(task)}
+                    style={{
+                      background: 'var(--bg-card)',
+                      border: isFailed ? '1px solid var(--red)' : '1px solid var(--border)',
+                      borderRadius: 8, padding: 12, marginBottom: 8, cursor: 'pointer',
+                      borderLeft: `3px solid ${PRIORITY_COLORS[task.priority]}`,
+                      transition: 'box-shadow 0.15s',
+                      animation: isInProgress ? 'taskPulse 2s ease-in-out infinite' : 'none',
+                    }}
+                    onMouseEnter={e => (e.currentTarget.style.boxShadow = 'var(--shadow-lg)')}
+                    onMouseLeave={e => (e.currentTarget.style.boxShadow = 'none')}
+                  >
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                      <div style={{ fontSize: 13, fontWeight: 600, lineHeight: 1.4, flex: 1 }}>{task.title}</div>
+                      <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
+                        <button onClick={e => { e.stopPropagation(); openEditModal(task); }} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: 2 }}><Edit3 size={12} /></button>
+                        <button onClick={e => { e.stopPropagation(); confirmRemoveTask(task.id); }} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: 2 }}><Trash2 size={12} /></button>
                       </div>
-                    );
-                  })}
-                </div>
-              </div>
-            ))}
+                    </div>
+
+                    {task.description && (
+                      <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4, lineHeight: 1.4 }}>
+                        {task.description.slice(0, 80)}{task.description.length > 80 ? '...' : ''}
+                      </div>
+                    )}
+
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 8 }}>
+                      {role && (
+                        <>
+                          <span style={{ fontSize: 14 }}>{role.icon}</span>
+                          <span style={{ fontSize: 11, fontWeight: 600 }}>{role.name}</span>
+                        </>
+                      )}
+                      {task.model && (
+                        <span style={{
+                          fontSize: 9, padding: '1px 6px', borderRadius: 4, fontWeight: 700, fontFamily: 'Fira Code, monospace',
+                          background: (MODEL_COLORS[tier] || MODEL_COLORS.local) + '22',
+                          color: MODEL_COLORS[tier] || MODEL_COLORS.local,
+                        }}>{tier}</span>
+                      )}
+                    </div>
+
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 8 }}>
+                      <PriorityBadge priority={task.priority} />
+                      <span style={{ fontSize: 10 }}>{SOURCE_ICONS[task.source] || '📋'}</span>
+                      <span style={{ fontSize: 10, color: 'var(--text-muted)', fontFamily: 'Fira Code, monospace', marginLeft: 'auto' }}>
+                        {timeAgo(task.createdAt)}
+                      </span>
+                    </div>
+
+                    {task.result && (
+                      <div style={{ fontSize: 10, color: 'var(--green)', marginTop: 6, fontStyle: 'italic' }}>
+                        ✓ {task.result.slice(0, 60)}{task.result.length > 60 ? '...' : ''}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
           </div>
+        ))}
+      </div>
+
+      {/* Collapsible Activity Bottom Panel */}
+      <div style={{
+        flexShrink: 0, borderTop: '1px solid var(--border)', background: 'var(--bg-card)',
+        height: activityBarHeight, transition: 'height 0.2s ease', overflow: 'hidden',
+      }}>
+        {/* Toggle bar */}
+        <div onClick={() => setActivityExpanded(prev => !prev)} style={{
+          height: 40, padding: '0 16px', display: 'flex', alignItems: 'center', gap: 8,
+          cursor: 'pointer', userSelect: 'none', flexShrink: 0,
+        }}>
+          <span style={{ fontSize: 12, color: 'var(--text-muted)', transition: 'transform 0.2s', transform: activityExpanded ? 'rotate(180deg)' : 'rotate(0deg)', display: 'inline-block' }}>▾</span>
+          <Activity size={12} style={{ color: 'var(--green)' }} />
+          <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 1 }}>
+            Activity
+          </span>
+          {stats.running > 0 && (
+            <span className="pulse-animation" style={{
+              background: 'var(--green-bg)', color: 'var(--green)',
+              padding: '2px 8px', borderRadius: 10, fontSize: 10, fontWeight: 700,
+            }}>{stats.running} live</span>
+          )}
+          <span style={{ fontSize: 11, color: 'var(--text-muted)', marginLeft: 'auto' }}>{activities.length} events</span>
         </div>
 
-        {/* Live Activity Feed */}
-        <div style={{
-          width: 300, borderLeft: '1px solid var(--border)', padding: 0,
-          overflowY: 'auto', background: 'var(--bg-card)', flexShrink: 0, display: 'flex', flexDirection: 'column',
-        }}>
+        {/* Expanded content: horizontal scroll of activity cards */}
+        {activityExpanded && (
           <div style={{
-            padding: '14px 16px', fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase',
-            letterSpacing: 1, display: 'flex', alignItems: 'center', gap: 6,
-            borderBottom: '1px solid var(--border)', position: 'sticky', top: 0, background: 'var(--bg-card)', zIndex: 1,
+            height: 200, overflowX: 'auto', overflowY: 'hidden',
+            padding: '0 16px 16px', display: 'flex', gap: 12, alignItems: 'flex-start',
           }}>
-            <Activity size={12} style={{ color: 'var(--green)' }} />
-            Agent Activity
-            {stats.running > 0 && (
-              <span className="pulse-animation" style={{
-                marginLeft: 'auto', background: 'var(--green-bg)', color: 'var(--green)',
-                padding: '2px 8px', borderRadius: 10, fontSize: 10, fontWeight: 700,
-              }}>{stats.running} live</span>
-            )}
-          </div>
-
-          <div style={{ flex: 1, overflowY: 'auto', padding: '8px 0' }}>
             {activities.length === 0 ? (
-              <div style={{ fontSize: 12, color: 'var(--text-muted)', padding: '24px 16px', textAlign: 'center' }}>
-                <Radio size={24} style={{ opacity: 0.3, marginBottom: 8 }} /><br />
+              <div style={{ fontSize: 12, color: 'var(--text-muted)', padding: '24px 16px', textAlign: 'center', width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                <Radio size={24} style={{ opacity: 0.3, marginBottom: 8 }} />
                 No recent agent activity
               </div>
             ) : (
@@ -509,14 +501,15 @@ export default function MissionControl() {
                   <div key={act.id}
                     onClick={() => setExpandedActivity(isExpanded ? null : act.id)}
                     style={{
-                      padding: '10px 16px', cursor: 'pointer', transition: 'background 0.15s',
-                      borderBottom: '1px solid var(--border)',
-                      background: isRunning ? 'var(--green-bg)' : 'transparent',
+                      minWidth: 260, maxWidth: 300, padding: '12px 14px', cursor: 'pointer',
+                      borderRadius: 8, border: '1px solid var(--border)', flexShrink: 0,
+                      background: isRunning ? 'var(--green-bg)' : 'var(--bg)',
+                      transition: 'background 0.15s',
                     }}
                     onMouseEnter={e => { if (!isRunning) e.currentTarget.style.background = 'var(--bg-card-hover)'; }}
-                    onMouseLeave={e => { if (!isRunning) e.currentTarget.style.background = 'transparent'; }}
+                    onMouseLeave={e => { if (!isRunning) e.currentTarget.style.background = isRunning ? 'var(--green-bg)' : 'var(--bg)'; }}
                   >
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
                       <span style={{ fontSize: 16 }}>{act.icon}</span>
                       <span style={{ fontSize: 12, fontWeight: 600, flex: 1 }}>{act.agent}</span>
                       {isRunning ? (
@@ -555,7 +548,7 @@ export default function MissionControl() {
               })
             )}
           </div>
-        </div>
+        )}
       </div>
 
       {/* Animations */}
@@ -704,6 +697,6 @@ export default function MissionControl() {
 
       {/* Keyboard Shortcuts Overlay */}
       {showShortcuts && <KeyboardShortcuts onClose={() => setShowShortcuts(false)} />}
-    </>
+    </div>
   );
 }
