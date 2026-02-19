@@ -46,6 +46,15 @@ export const api = {
     if (!res.ok) throw new Error(`${res.status}`);
     return res.json();
   },
+  patch: async (endpoint: string, body?: Record<string, unknown>) => {
+    const res = await fetch(`${baseUrl()}${endpoint}`, {
+      method: 'PATCH',
+      headers: headers(),
+      body: body ? JSON.stringify(body) : undefined,
+    });
+    if (!res.ok) throw new Error(`${res.status}`);
+    return res.json();
+  },
   del: async (endpoint: string, body?: Record<string, unknown>) => {
     const res = await fetch(`${baseUrl()}${endpoint}`, {
       method: 'DELETE',
@@ -79,6 +88,7 @@ export const getPipelineStatus = () => api.get('/api/pipeline');
 export const getTasks = () => api.get('/api/tasks');
 export const createTask = (task: Record<string, unknown>) => api.post('/api/tasks', task);
 export const updateTask = (id: number, data: Record<string, unknown>) => api.post(`/api/tasks/${id}`, data);
+export const patchTask = (id: number, data: Record<string, unknown>) => api.patch(`/api/tasks/${id}`, data);
 export const deleteTaskApi = (id: number) => api.del(`/api/tasks/${id}`);
 export const startTask = (id: number) => api.post(`/api/tasks/${id}/start`);
 export const completeTask = (id: number, result: string) => api.post(`/api/tasks/${id}/complete`, { result });

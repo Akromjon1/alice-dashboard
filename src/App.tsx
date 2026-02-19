@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { isConfigured } from './api';
-import { LayoutDashboard, Bot, Puzzle, Settings as SettingsIcon, Sun, Moon, Youtube, Crosshair, Trophy, Clock } from 'lucide-react';
+import { LayoutDashboard, Bot, Puzzle, Settings as SettingsIcon, Sun, Moon, Youtube, Crosshair, Trophy, Clock, HelpCircle } from 'lucide-react';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
 import MissionControl from './pages/MissionControl';
@@ -10,12 +10,14 @@ import Settings from './pages/Settings';
 import YouTubePage from './pages/YouTube';
 import Matches from './pages/Matches';
 import CronJobs from './pages/CronJobs';
+import KeyboardShortcuts from './pages/KeyboardShortcuts';
 
 type Page = 'mission' | 'dashboard' | 'agents' | 'matches' | 'youtube' | 'cron' | 'skills' | 'settings';
 
 export default function App() {
   const [loggedIn, setLoggedIn] = useState(isConfigured());
   const [page, setPage] = useState<Page>('mission');
+  const [showShortcuts, setShowShortcuts] = useState(false);
   const [theme, setTheme] = useState<'dark' | 'light'>(() => {
     return (localStorage.getItem('alice-theme') as 'dark' | 'light') || 'dark';
   });
@@ -24,6 +26,28 @@ export default function App() {
     document.documentElement.setAttribute('data-theme', theme);
     localStorage.setItem('alice-theme', theme);
   }, [theme]);
+
+  // Global keyboard shortcuts
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement;
+      const isInput = target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT' || target.isContentEditable;
+
+      if (e.key === 'Escape' && showShortcuts) {
+        setShowShortcuts(false);
+        return;
+      }
+
+      if (isInput) return;
+
+      if (e.key === '?') {
+        e.preventDefault();
+        setShowShortcuts(prev => !prev);
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [showShortcuts]);
 
   if (!loggedIn) {
     return <Login onLogin={() => setLoggedIn(true)} />;
@@ -76,6 +100,14 @@ export default function App() {
         <div className="sidebar-footer">
           <div
             className="theme-toggle"
+            onClick={() => setShowShortcuts(true)}
+            style={{ marginBottom: 4, cursor: 'pointer' }}
+          >
+            <HelpCircle size={18} />
+            Shortcuts
+          </div>
+          <div
+            className="theme-toggle"
             onClick={() => setTheme(t => t === 'dark' ? 'light' : 'dark')}
           >
             {theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
@@ -86,6 +118,8 @@ export default function App() {
       <div className="main">
         {renderPage()}
       </div>
+
+      {showShortcuts && <KeyboardShortcuts onClose={() => setShowShortcuts(false)} />}
     </div>
   );
 }

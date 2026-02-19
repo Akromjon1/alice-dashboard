@@ -1,16 +1,21 @@
 import { useEffect, useState } from 'react';
 import { getSkills } from '../api';
-import { Puzzle } from 'lucide-react';
+import { Puzzle, AlertTriangle, RefreshCw } from 'lucide-react';
+import LoadingSkeleton from '../components/LoadingSkeleton';
 
 export default function Skills() {
   const [skills, setSkills] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
+  const refresh = () => {
     getSkills()
-      .then(data => setSkills(data.skills || []))
-      .catch(() => {})
+      .then(data => { setSkills(data.skills || []); setError(null); })
+      .catch(err => { setError(err.message || 'Failed to load'); })
       .finally(() => setLoading(false));
+  };
+
+  useEffect(() => { refresh(); // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   return (
@@ -21,7 +26,20 @@ export default function Skills() {
           Installed skills from your OpenClaw instance.
         </p>
         {loading ? (
-          <div className="card-desc">Loading...</div>
+          <LoadingSkeleton count={3} />
+        ) : error ? (
+          <div className="card" style={{ cursor: 'default', textAlign: 'center', padding: 40 }}>
+            <AlertTriangle size={32} style={{ color: 'var(--yellow)', marginBottom: 12 }} />
+            <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 6 }}>Failed to load skills</div>
+            <div className="card-desc" style={{ marginBottom: 16 }}>{error}</div>
+            <button onClick={() => { setLoading(true); setError(null); refresh(); }} style={{
+              padding: '10px 20px', background: 'var(--accent)', color: 'white',
+              border: 'none', borderRadius: 8, cursor: 'pointer', fontSize: 14,
+              display: 'inline-flex', alignItems: 'center', gap: 6, fontFamily: 'Fira Sans, sans-serif',
+            }}>
+              <RefreshCw size={14} /> Retry
+            </button>
+          </div>
         ) : skills.length === 0 ? (
           <div className="card-desc">No skills found</div>
         ) : (

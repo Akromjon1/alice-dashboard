@@ -1,15 +1,17 @@
 import { useEffect, useState } from 'react';
 import { getCronJobs } from '../api';
-import { Clock, Play, Pause, Calendar, RefreshCw, Zap } from 'lucide-react';
+import { Clock, Play, Pause, Calendar, RefreshCw, Zap, AlertTriangle } from 'lucide-react';
+import LoadingSkeleton from '../components/LoadingSkeleton';
 
 export default function CronJobs() {
   const [jobs, setJobs] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   const refresh = () => {
     getCronJobs()
-      .then(data => setJobs(data.jobs || []))
-      .catch(() => {})
+      .then(data => { setJobs(data.jobs || []); setError(null); })
+      .catch(err => { setError(err.message || 'Failed to load'); })
       .finally(() => setLoading(false));
   };
 
@@ -58,7 +60,20 @@ export default function CronJobs() {
         </p>
 
         {loading ? (
-          <div className="card-desc">Loading...</div>
+          <LoadingSkeleton count={3} />
+        ) : error ? (
+          <div className="card" style={{ cursor: 'default', textAlign: 'center', padding: 40 }}>
+            <AlertTriangle size={32} style={{ color: 'var(--yellow)', marginBottom: 12 }} />
+            <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 6 }}>Failed to load cron jobs</div>
+            <div className="card-desc" style={{ marginBottom: 16 }}>{error}</div>
+            <button onClick={() => { setLoading(true); setError(null); refresh(); }} style={{
+              padding: '10px 20px', background: 'var(--accent)', color: 'white',
+              border: 'none', borderRadius: 8, cursor: 'pointer', fontSize: 14,
+              display: 'inline-flex', alignItems: 'center', gap: 6, fontFamily: 'Fira Sans, sans-serif',
+            }}>
+              <RefreshCw size={14} /> Retry
+            </button>
+          </div>
         ) : jobs.length === 0 ? (
           <div className="card" style={{ cursor: 'default', textAlign: 'center', padding: 40 }}>
             <Clock size={32} style={{ color: 'var(--text-muted)', marginBottom: 12 }} />

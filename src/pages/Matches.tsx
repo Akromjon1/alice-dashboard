@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { getMatches, addTeam, getUfc } from '../api';
-import { Trophy, Plus, X, ChevronLeft, ChevronRight, Calendar, Clock } from 'lucide-react';
+import { Trophy, Plus, X, ChevronLeft, ChevronRight, Calendar, Clock, AlertTriangle, RefreshCw } from 'lucide-react';
+import LoadingSkeleton from '../components/LoadingSkeleton';
 
 type View = 'overview' | 'team-calendar' | 'tournament';
 
@@ -59,6 +60,7 @@ export default function Matches() {
   const [data, setData] = useState<any>({});
   const [ufcEvents, setUfcEvents] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [view, setView] = useState<View>('overview');
   const [selectedTeam, setSelectedTeam] = useState('');
   const [selectedTournament, setSelectedTournament] = useState('');
@@ -75,7 +77,8 @@ export default function Matches() {
     ]).then(([d, u]) => {
       setData(d);
       setUfcEvents(u.events || []);
-    }).finally(() => setLoading(false));
+      setError(null);
+    }).catch(err => { setError(err.message || 'Failed to load'); }).finally(() => setLoading(false));
   };
   useEffect(() => { refresh(); }, []);
 
@@ -237,7 +240,20 @@ export default function Matches() {
     <>
       <div className="main-header"><Trophy size={20} /> Matches</div>
       <div className="main-content">
-        {loading ? <div className="card-desc">Loading...</div> : (
+        {loading ? <LoadingSkeleton count={4} /> : error ? (
+          <div className="card" style={{ cursor: 'default', textAlign: 'center', padding: 40 }}>
+            <AlertTriangle size={32} style={{ color: 'var(--yellow)', marginBottom: 12 }} />
+            <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 6 }}>Failed to load matches</div>
+            <div className="card-desc" style={{ marginBottom: 16 }}>{error}</div>
+            <button onClick={() => { setLoading(true); setError(null); refresh(); }} style={{
+              padding: '10px 20px', background: 'var(--accent)', color: 'white',
+              border: 'none', borderRadius: 8, cursor: 'pointer', fontSize: 14,
+              display: 'inline-flex', alignItems: 'center', gap: 6, fontFamily: 'Fira Sans, sans-serif',
+            }}>
+              <RefreshCw size={14} /> Retry
+            </button>
+          </div>
+        ) : (
           <>
             {/* ⚽ FOOTBALL SECTION */}
             {(data.teams || []).length > 0 && (

@@ -1,23 +1,30 @@
 import { useEffect, useState } from 'react';
 import { getYoutube, addYoutubeChannel, removeYoutubeChannel, addYoutubeVideo } from '../api';
-import { Youtube, Plus, Trash2, ExternalLink, Tv, Video, X } from 'lucide-react';
+import { Youtube, Plus, Trash2, ExternalLink, Tv, Video, X, AlertTriangle, RefreshCw } from 'lucide-react';
+import { useToast } from '../contexts/ToastContext';
+import ConfirmDialog from '../components/ConfirmDialog';
+import LoadingSkeleton from '../components/LoadingSkeleton';
 
 export default function YouTube() {
+  const { showToast } = useToast();
   const [channels, setChannels] = useState<any[]>([]);
   const [videos, setVideos] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [showAddChannel, setShowAddChannel] = useState(false);
   const [showAddVideo, setShowAddVideo] = useState(false);
   const [newChannel, setNewChannel] = useState({ name: '', url: '' });
   const [newVideo, setNewVideo] = useState({ title: '', url: '' });
+  const [removeUrl, setRemoveUrl] = useState<string | null>(null);
 
   const refresh = () => {
     getYoutube()
       .then(data => {
         setChannels(data.channels || []);
         setVideos(data.videos || []);
+        setError(null);
       })
-      .catch(() => {})
+      .catch(err => { setError(err.message || 'Failed to load'); })
       .finally(() => setLoading(false));
   };
 
@@ -25,23 +32,39 @@ export default function YouTube() {
 
   const handleAddChannel = async () => {
     if (!newChannel.name || !newChannel.url) return;
-    await addYoutubeChannel(newChannel.name, newChannel.url);
-    setNewChannel({ name: '', url: '' });
-    setShowAddChannel(false);
-    refresh();
+    try {
+      await addYoutubeChannel(newChannel.name, newChannel.url);
+      setNewChannel({ name: '', url: '' });
+      setShowAddChannel(false);
+      showToast('Channel added', 'success');
+      refresh();
+    } catch {
+      showToast('Failed to add channel', 'error');
+    }
   };
 
   const handleRemoveChannel = async (url: string) => {
-    await removeYoutubeChannel(url);
-    refresh();
+    try {
+      await removeYoutubeChannel(url);
+      showToast('Channel removed', 'info');
+      refresh();
+    } catch {
+      showToast('Failed to remove channel', 'error');
+    }
+    setRemoveUrl(null);
   };
 
   const handleAddVideo = async () => {
     if (!newVideo.title || !newVideo.url) return;
-    await addYoutubeVideo(newVideo.title, newVideo.url);
-    setNewVideo({ title: '', url: '' });
-    setShowAddVideo(false);
-    refresh();
+    try {
+      await addYoutubeVideo(newVideo.title, newVideo.url);
+      setNewVideo({ title: '', url: '' });
+      setShowAddVideo(false);
+      showToast('Video added', 'success');
+      refresh();
+    } catch {
+      showToast('Failed to add video', 'error');
+    }
   };
 
   return (
@@ -51,7 +74,20 @@ export default function YouTube() {
       </div>
       <div className="main-content">
         {loading ? (
-          <div className="card-desc">Loading...</div>
+          <LoadingSkeleton count={3} />
+        ) : error ? (
+          <div className="card" style={{ cursor: 'default', textAlign: 'center', padding: 40 }}>
+            <AlertTriangle size={32} style={{ color: 'var(--yellow)', marginBottom: 12 }} />
+            <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 6 }}>Failed to load YouTube data</div>
+            <div className="card-desc" style={{ marginBottom: 16 }}>{error}</div>
+            <button onClick={() => { setLoading(true); setError(null); refresh(); }} style={{
+              padding: '10px 20px', background: 'var(--accent)', color: 'white',
+              border: 'none', borderRadius: 8, cursor: 'pointer', fontSize: 14,
+              display: 'inline-flex', alignItems: 'center', gap: 6, fontFamily: 'Fira Sans, sans-serif',
+            }}>
+              <RefreshCw size={14} /> Retry
+            </button>
+          </div>
         ) : (
           <>
             {/* Channels Section */}
@@ -136,7 +172,7 @@ export default function YouTube() {
                       <ExternalLink size={16} />
                     </a>
                     <button
-                      onClick={() => handleRemoveChannel(ch.url)}
+                      onClick={() => setRemoveUrl(ch.url)}
                       style={{ background: 'none', border: 'none', color: 'var(--red)', cursor: 'pointer', padding: 0 }}
                     >
                       <Trash2 size={16} />
@@ -235,6 +271,18 @@ export default function YouTube() {
           </>
         )}
       </div>
+
+      {/* Remove Channel Confirmation */}
+      {removeUrl !== null && (
+        <ConfirmDialog
+          title="Remove Channel"
+          message="Are you sure you want to remove this channel?"
+          confirmLabel="Remove"
+          danger
+          onConfirm={() => handleRemoveChannel(removeUrl)}
+          onCancel={() => setRemoveUrl(null)}
+        />
+      )}
     </>
   );
 }

@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
 import { getAgents, sendChat } from '../api';
-import { Bot, Send, Activity, Eye, Pause, Play, MessageSquare, ArrowRight, Zap, Shield } from 'lucide-react';
+import { Bot, Send, Activity, Eye, Pause, Play, MessageSquare, ArrowRight, Zap, Shield, AlertTriangle, RefreshCw } from 'lucide-react';
 import { tierColor, tierBgColor } from '../utils';
 import ModelBadge from '../components/ModelBadge';
 import StatusBadge from '../components/StatusBadge';
+import LoadingSkeleton from '../components/LoadingSkeleton';
 
 interface AgentData {
   id: string;
@@ -27,6 +28,7 @@ const pipelineSteps = [
 export default function Agents() {
   const [agents, setAgents] = useState<AgentData[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [chatOpen, setChatOpen] = useState(false);
   const [input, setInput] = useState('');
   const [messages, setMessages] = useState<{ role: string; text: string }[]>([]);
@@ -34,8 +36,8 @@ export default function Agents() {
 
   useEffect(() => {
     getAgents()
-      .then((data: { agents?: AgentData[] }) => setAgents(data.agents || []))
-      .catch(() => {})
+      .then((data: { agents?: AgentData[] }) => { setAgents(data.agents || []); setError(null); })
+      .catch(err => { setError(err.message || 'Failed to load agents'); })
       .finally(() => setLoading(false));
   }, []);
 
@@ -83,7 +85,20 @@ export default function Agents() {
       </div>
       <div className="main-content">
         {loading ? (
-          <div className="card-desc">Loading agents...</div>
+          <LoadingSkeleton count={4} />
+        ) : error ? (
+          <div className="card" style={{ cursor: 'default', textAlign: 'center', padding: 40 }}>
+            <AlertTriangle size={32} style={{ color: 'var(--yellow)', marginBottom: 12 }} />
+            <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 6 }}>Failed to load agents</div>
+            <div className="card-desc" style={{ marginBottom: 16 }}>{error}</div>
+            <button onClick={() => { setLoading(true); setError(null); getAgents().then((data: { agents?: AgentData[] }) => { setAgents(data.agents || []); setError(null); }).catch(err => setError(err.message)).finally(() => setLoading(false)); }} style={{
+              padding: '10px 20px', background: 'var(--accent)', color: 'white',
+              border: 'none', borderRadius: 8, cursor: 'pointer', fontSize: 14,
+              display: 'inline-flex', alignItems: 'center', gap: 6, fontFamily: 'Fira Sans, sans-serif',
+            }}>
+              <RefreshCw size={14} /> Retry
+            </button>
+          </div>
         ) : (
           <>
             {/* Pipeline Section */}

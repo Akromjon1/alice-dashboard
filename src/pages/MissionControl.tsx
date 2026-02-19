@@ -1,10 +1,13 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
-import { getAgents, getActivity, getPipelineStatus, getTasks, createTask, updateTask, deleteTaskApi, getModelRoles } from '../api';
-import { Radio, Users, ListTodo, Plus, Activity, CheckCircle, XCircle, Loader, Trash2 } from 'lucide-react';
+import { getAgents, getActivity, getPipelineStatus, getTasks, createTask, updateTask, patchTask, deleteTaskApi, getModelRoles } from '../api';
+import { Radio, Users, ListTodo, Plus, Activity, CheckCircle, XCircle, Loader, Trash2, Search, Edit3, AlertTriangle, RefreshCw } from 'lucide-react';
 import { timeAgo, getModelTier } from '../utils';
 import { usePolling } from '../hooks/usePolling';
 import { useToast } from '../contexts/ToastContext';
 import PriorityBadge from '../components/PriorityBadge';
+import ConfirmDialog from '../components/ConfirmDialog';
+import LoadingSkeleton from '../components/LoadingSkeleton';
+import KeyboardShortcuts from '../components/KeyboardShortcuts';
 import type { Task, Activity as ActivityType, MissionAgent, RoleInfo, PipelineStatus } from '../types';
 
 const COLUMNS: { id: Task['status']; label: string }[] = [
@@ -21,6 +24,8 @@ const PRIORITY_COLORS: Record<string, string> = { high: 'var(--red)', medium: 'v
 const MODEL_COLORS: Record<string, string> = { opus: '#F59E0B', sonnet: '#3B82F6', haiku: '#10B981', local: '#6B7280' };
 const SOURCE_ICONS: Record<string, string> = { telegram: '📱', dashboard: '🖥️', pipeline: '⚙️' };
 
+type FilterMode = 'all' | 'high' | 'mine';
+
 export default function MissionControl() {
   const { showToast } = useToast();
   const [agents, setAgents] = useState<MissionAgent[]>([]);
@@ -35,11 +40,28 @@ export default function MissionControl() {
   const [expandedActivity, setExpandedActivity] = useState<string | null>(null);
   const [workingAgents, setWorkingAgents] = useState<Set<string>>(new Set());
   const rolesRef = useRef<RoleInfo[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  // Search & Filter
+  const [searchQuery, setSearchQuery] = useState('');
+  const [filterMode, setFilterMode] = useState<FilterMode>('all');
+
+  // Edit modal
+  const [editTask, setEditTask] = useState<Task | null>(null);
+  const [editForm, setEditForm] = useState({ title: '', description: '', assignedTo: '', priority: 'medium' as 'high' | 'medium' | 'low' });
+
+  // Delete confirmation
+  const [deleteTaskId, setDeleteTaskId] = useState<number | null>(null);
+
+  // Keyboard shortcuts overlay
+  const [showShortcuts, setShowShortcuts] = useState(false);
 
   const fetchTasks = useCallback(() => {
-    getTasks().then((data: { tasks?: Task[] }) => {
+    return getTasks().then((data: { tasks?: Task[] }) => {
       setTasks(data.tasks || []);
-    }).catch(() => {});
+      setError(null);
+    }).catch((err) => { setError(err.message || 'Failed to load tasks'); });
   }, []);
 
   const fetchActivity = useCallback(() => {
@@ -58,35 +80,63 @@ export default function MissionControl() {
     }).catch(() => {});
   }, []);
 
-  // Use polling at 10s interval
   usePolling(() => Promise.all([fetchTasks(), fetchActivity(), fetchPipeline()]).then(() => null), 10000);
 
   useEffect(() => {
-    getAgents().then((data: { agents?: Array<{ id: string; name: string; icon?: string; description?: string; type?: string; status?: string }> }) => {
-      const mapped: MissionAgent[] = (data.agents || []).map(a => ({
-        id: a.id, name: a.name.replace(' (Main)', ''), icon: a.icon || '🤖',
-        role: a.description?.slice(0, 30) || a.type || '',
-        badge: (a.type === 'main' ? 'LEAD' : a.type === 'watcher' ? 'SPC' : 'INT') as MissionAgent['badge'],
-        status: (a.status === 'running' ? 'WORKING' : 'IDLE') as MissionAgent['status'],
-      }));
-      setAgents(mapped);
-      setStats(prev => ({ ...prev, agents: mapped.filter(a => a.status === 'WORKING').length }));
-    }).catch(() => {});
-
-    getModelRoles().then((data: { roles?: Array<{ id: string; name: string; icon: string; model: string }> }) => {
-      const r: RoleInfo[] = (data.roles || []).map(role => ({ id: role.id, name: role.name, icon: role.icon, model: role.model }));
-      setRoles(r);
-      rolesRef.current = r;
-    }).catch(() => {});
-
-    fetchTasks();
-    fetchActivity();
-    fetchPipeline();
+    Promise.all([
+      getAgents().then((data: { agents?: Array<{ id: string; name: string; icon?: string; description?: string; type?: string; status?: string }> }) => {
+        const mapped: MissionAgent[] = (data.agents || []).map(a => ({
+          id: a.id, name: a.name.replace(' (Main)', ''), icon: a.icon || '🤖',
+          role: a.description?.slice(0, 30) || a.type || '',
+          badge: (a.type === 'main' ? 'LEAD' : a.type === 'watcher' ? 'SPC' : 'INT') as MissionAgent['badge'],
+          status: (a.status === 'running' ? 'WORKING' : 'IDLE') as MissionAgent['status'],
+        }));
+        setAgents(mapped);
+        setStats(prev => ({ ...prev, agents: mapped.filter(a => a.status === 'WORKING').length }));
+      }),
+      getModelRoles().then((data: { roles?: Array<{ id: string; name: string; icon: string; model: string }> }) => {
+        const r: RoleInfo[] = (data.roles || []).map(role => ({ id: role.id, name: role.name, icon: role.icon, model: role.model }));
+        setRoles(r);
+        rolesRef.current = r;
+      }),
+      fetchTasks(),
+      fetchActivity(),
+      fetchPipeline(),
+    ]).catch(() => {}).finally(() => setLoading(false));
   }, [fetchTasks, fetchActivity, fetchPipeline]);
 
   useEffect(() => {
     setStats(prev => ({ ...prev, tasks: tasks.length }));
   }, [tasks]);
+
+  // Keyboard shortcuts
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement;
+      const isInput = target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT' || target.isContentEditable;
+
+      if (e.key === 'Escape') {
+        if (showShortcuts) { setShowShortcuts(false); return; }
+        if (editTask) { setEditTask(null); return; }
+        if (showAdd) { setShowAdd(false); return; }
+        if (deleteTaskId !== null) { setDeleteTaskId(null); return; }
+      }
+
+      if (isInput) return;
+
+      if (e.key === '?') {
+        e.preventDefault();
+        setShowShortcuts(prev => !prev);
+      }
+
+      if (e.key === 'n' || e.key === 'N') {
+        e.preventDefault();
+        setShowAdd(true);
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [editTask, showAdd, deleteTaskId, showShortcuts]);
 
   const addTask = () => {
     if (!newTask.title) return;
@@ -108,11 +158,46 @@ export default function MissionControl() {
     updateTask(taskId, { status: newStatus }).then(() => fetchTasks()).catch(() => { showToast('Failed to update task', 'error'); });
   };
 
-  const removeTask = (taskId: number) => {
-    deleteTaskApi(taskId).then(() => { fetchTasks(); showToast('Task deleted', 'info'); }).catch(() => { showToast('Failed to delete task', 'error'); });
+  const confirmRemoveTask = (taskId: number) => {
+    setDeleteTaskId(taskId);
   };
 
-  const columnTasks = (col: string) => tasks.filter(t => t.status === col);
+  const removeTask = (taskId: number) => {
+    deleteTaskApi(taskId).then(() => { fetchTasks(); showToast('Task deleted', 'info'); }).catch(() => { showToast('Failed to delete task', 'error'); });
+    setDeleteTaskId(null);
+  };
+
+  const openEditModal = (task: Task) => {
+    setEditTask(task);
+    setEditForm({ title: task.title, description: task.description || '', assignedTo: task.assignedTo || '', priority: task.priority });
+  };
+
+  const saveEdit = () => {
+    if (!editTask) return;
+    patchTask(editTask.id, {
+      title: editForm.title,
+      description: editForm.description,
+      assignedTo: editForm.assignedTo || undefined,
+      priority: editForm.priority,
+    }).then(() => {
+      fetchTasks();
+      setEditTask(null);
+      showToast('Task updated', 'success');
+    }).catch(() => { showToast('Failed to update task', 'error'); });
+  };
+
+  // Filtering
+  const filteredTasks = tasks.filter(t => {
+    if (searchQuery) {
+      const q = searchQuery.toLowerCase();
+      if (!t.title.toLowerCase().includes(q) && !(t.description || '').toLowerCase().includes(q)) return false;
+    }
+    if (filterMode === 'high' && t.priority !== 'high') return false;
+    if (filterMode === 'mine' && t.assignedTo !== 'coding') return false;
+    return true;
+  });
+
+  const columnTasks = (col: string) => filteredTasks.filter(t => t.status === col);
   const handleDragStart = (taskId: number) => setDragTask(taskId);
   const handleDrop = (status: Task['status']) => { if (dragTask) { moveTask(dragTask, status); setDragTask(null); } };
 
@@ -122,6 +207,49 @@ export default function MissionControl() {
   };
 
   const getRoleInfo = (assignedTo: string): RoleInfo | undefined => rolesRef.current.find(r => r.id === assignedTo);
+
+  if (loading) {
+    return (
+      <>
+        <div className="main-header" style={{ justifyContent: 'space-between' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <span style={{ fontSize: 18 }}>◇</span>
+            <span style={{ fontFamily: 'Fira Code, monospace', fontWeight: 700, letterSpacing: 1 }}>MISSION CONTROL</span>
+          </div>
+        </div>
+        <div className="main-content">
+          <LoadingSkeleton count={4} />
+        </div>
+      </>
+    );
+  }
+
+  if (error && tasks.length === 0) {
+    return (
+      <>
+        <div className="main-header" style={{ justifyContent: 'space-between' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <span style={{ fontSize: 18 }}>◇</span>
+            <span style={{ fontFamily: 'Fira Code, monospace', fontWeight: 700, letterSpacing: 1 }}>MISSION CONTROL</span>
+          </div>
+        </div>
+        <div className="main-content">
+          <div className="card" style={{ cursor: 'default', textAlign: 'center', padding: 40 }}>
+            <AlertTriangle size={32} style={{ color: 'var(--yellow)', marginBottom: 12 }} />
+            <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 6 }}>Failed to load data</div>
+            <div className="card-desc" style={{ marginBottom: 16 }}>{error}</div>
+            <button onClick={() => { setLoading(true); setError(null); fetchTasks().finally(() => setLoading(false)); }} style={{
+              padding: '10px 20px', background: 'var(--accent)', color: 'white',
+              border: 'none', borderRadius: 8, cursor: 'pointer', fontSize: 14,
+              display: 'inline-flex', alignItems: 'center', gap: 6, fontFamily: 'Fira Sans, sans-serif',
+            }}>
+              <RefreshCw size={14} /> Retry
+            </button>
+          </div>
+        </div>
+      </>
+    );
+  }
 
   return (
     <>
@@ -175,6 +303,36 @@ export default function MissionControl() {
             <Plus size={14} /> New Task
           </button>
         </div>
+      </div>
+
+      {/* Search & Filter Bar */}
+      <div style={{
+        padding: '10px 16px', borderBottom: '1px solid var(--border)',
+        display: 'flex', alignItems: 'center', gap: 12, background: 'var(--bg-card)',
+      }}>
+        <div style={{ position: 'relative', flex: 1, maxWidth: 400 }}>
+          <Search size={14} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
+          <input
+            value={searchQuery}
+            onChange={e => setSearchQuery(e.target.value)}
+            placeholder="Search tasks..."
+            style={{
+              width: '100%', padding: '8px 12px 8px 34px', background: 'var(--bg)',
+              border: '1px solid var(--border)', borderRadius: 8, color: 'var(--text)',
+              fontSize: 13, outline: 'none', fontFamily: 'Fira Sans, sans-serif', boxSizing: 'border-box',
+            }}
+          />
+        </div>
+        {(['all', 'high', 'mine'] as FilterMode[]).map(mode => (
+          <button key={mode} onClick={() => setFilterMode(mode)} style={{
+            padding: '6px 14px', fontSize: 12, fontWeight: 600, border: 'none', borderRadius: 6,
+            cursor: 'pointer', fontFamily: 'Fira Sans, sans-serif',
+            background: filterMode === mode ? 'var(--accent)' : 'var(--border)',
+            color: filterMode === mode ? 'white' : 'var(--text-muted)',
+          }}>
+            {mode === 'all' ? 'All' : mode === 'high' ? '🔴 High Priority' : '👤 My Agent'}
+          </button>
+        ))}
       </div>
 
       <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
@@ -252,20 +410,25 @@ export default function MissionControl() {
                     const isInProgress = task.status === 'in_progress';
                     const isFailed = task.status === 'failed';
                     return (
-                      <div key={task.id} draggable onDragStart={() => handleDragStart(task.id)} style={{
-                        background: 'var(--bg-card)',
-                        border: isFailed ? '1px solid var(--red)' : '1px solid var(--border)',
-                        borderRadius: 8, padding: 12, marginBottom: 8, cursor: 'grab',
-                        borderLeft: `3px solid ${PRIORITY_COLORS[task.priority]}`,
-                        transition: 'box-shadow 0.15s',
-                        animation: isInProgress ? 'taskPulse 2s ease-in-out infinite' : 'none',
-                      }}
+                      <div key={task.id} draggable onDragStart={() => handleDragStart(task.id)}
+                        onClick={() => openEditModal(task)}
+                        style={{
+                          background: 'var(--bg-card)',
+                          border: isFailed ? '1px solid var(--red)' : '1px solid var(--border)',
+                          borderRadius: 8, padding: 12, marginBottom: 8, cursor: 'pointer',
+                          borderLeft: `3px solid ${PRIORITY_COLORS[task.priority]}`,
+                          transition: 'box-shadow 0.15s',
+                          animation: isInProgress ? 'taskPulse 2s ease-in-out infinite' : 'none',
+                        }}
                         onMouseEnter={e => (e.currentTarget.style.boxShadow = 'var(--shadow-lg)')}
                         onMouseLeave={e => (e.currentTarget.style.boxShadow = 'none')}
                       >
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                           <div style={{ fontSize: 13, fontWeight: 600, lineHeight: 1.4, flex: 1 }}>{task.title}</div>
-                          <button onClick={() => removeTask(task.id)} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: 2, flexShrink: 0 }}><Trash2 size={12} /></button>
+                          <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
+                            <button onClick={e => { e.stopPropagation(); openEditModal(task); }} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: 2 }}><Edit3 size={12} /></button>
+                            <button onClick={e => { e.stopPropagation(); confirmRemoveTask(task.id); }} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: 2 }}><Trash2 size={12} /></button>
+                          </div>
                         </div>
 
                         {task.description && (
@@ -468,6 +631,79 @@ export default function MissionControl() {
           </div>
         </div>
       )}
+
+      {/* Edit Task Modal */}
+      {editTask && (
+        <div style={{
+          position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100,
+        }} onClick={() => setEditTask(null)}>
+          <div style={{
+            background: 'var(--bg-card)', border: '1px solid var(--border)',
+            borderRadius: 14, padding: 28, width: 440, boxShadow: 'var(--shadow-lg)',
+          }} onClick={e => e.stopPropagation()}>
+            <h3 style={{ marginBottom: 20, fontFamily: 'Fira Code, monospace', fontSize: 16 }}>Edit Task</h3>
+            <label style={{ fontSize: 12, color: 'var(--text-muted)', display: 'block', marginBottom: 4, textTransform: 'uppercase', letterSpacing: 0.5 }}>Title</label>
+            <input value={editForm.title} onChange={e => setEditForm({ ...editForm, title: e.target.value })} placeholder="Task title" style={{
+              width: '100%', padding: '10px 12px', background: 'var(--bg)', border: '1px solid var(--border)',
+              borderRadius: 8, color: 'var(--text)', fontSize: 14, marginBottom: 14, outline: 'none', fontFamily: 'Fira Sans, sans-serif', boxSizing: 'border-box',
+            }} />
+            <label style={{ fontSize: 12, color: 'var(--text-muted)', display: 'block', marginBottom: 4, textTransform: 'uppercase', letterSpacing: 0.5 }}>Description</label>
+            <textarea value={editForm.description} onChange={e => setEditForm({ ...editForm, description: e.target.value })} placeholder="What needs to be done?" rows={3} style={{
+              width: '100%', padding: '10px 12px', background: 'var(--bg)', border: '1px solid var(--border)',
+              borderRadius: 8, color: 'var(--text)', fontSize: 14, marginBottom: 14, outline: 'none', resize: 'vertical', fontFamily: 'Fira Sans, sans-serif', boxSizing: 'border-box',
+            }} />
+            <div style={{ display: 'flex', gap: 12, marginBottom: 14 }}>
+              <div style={{ flex: 1 }}>
+                <label style={{ fontSize: 12, color: 'var(--text-muted)', display: 'block', marginBottom: 4, textTransform: 'uppercase', letterSpacing: 0.5 }}>Assign to Agent</label>
+                <select value={editForm.assignedTo} onChange={e => setEditForm({ ...editForm, assignedTo: e.target.value })} style={{
+                  width: '100%', padding: '10px 12px', background: 'var(--bg)', border: '1px solid var(--border)',
+                  borderRadius: 8, color: 'var(--text)', fontSize: 14, outline: 'none', fontFamily: 'Fira Sans, sans-serif',
+                }}>
+                  <option value="">Select agent</option>
+                  {roles.map(r => <option key={r.id} value={r.id}>{r.icon} {r.name}</option>)}
+                </select>
+              </div>
+              <div style={{ flex: 1 }}>
+                <label style={{ fontSize: 12, color: 'var(--text-muted)', display: 'block', marginBottom: 4, textTransform: 'uppercase', letterSpacing: 0.5 }}>Priority</label>
+                <select value={editForm.priority} onChange={e => setEditForm({ ...editForm, priority: e.target.value as 'high' | 'medium' | 'low' })} style={{
+                  width: '100%', padding: '10px 12px', background: 'var(--bg)', border: '1px solid var(--border)',
+                  borderRadius: 8, color: 'var(--text)', fontSize: 14, outline: 'none', fontFamily: 'Fira Sans, sans-serif',
+                }}>
+                  <option value="high">🔴 High</option>
+                  <option value="medium">🟡 Medium</option>
+                  <option value="low">🟢 Low</option>
+                </select>
+              </div>
+            </div>
+            <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+              <button onClick={() => setEditTask(null)} style={{
+                padding: '10px 20px', background: 'var(--border)', color: 'var(--text)',
+                border: 'none', borderRadius: 8, cursor: 'pointer', fontSize: 14, fontFamily: 'Fira Sans, sans-serif',
+              }}>Cancel</button>
+              <button onClick={saveEdit} style={{
+                padding: '10px 20px', background: 'var(--accent)', color: 'white',
+                border: 'none', borderRadius: 8, cursor: 'pointer', fontSize: 14, fontFamily: 'Fira Sans, sans-serif', fontWeight: 600,
+              }}>Save Changes</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Confirmation */}
+      {deleteTaskId !== null && (
+        <ConfirmDialog
+          title="Delete Task"
+          message="Are you sure you want to delete this task?"
+          confirmLabel="Delete"
+          danger
+          onConfirm={() => removeTask(deleteTaskId)}
+          onCancel={() => setDeleteTaskId(null)}
+        />
+      )}
+
+      {/* Keyboard Shortcuts Overlay */}
+      {showShortcuts && <KeyboardShortcuts onClose={() => setShowShortcuts(false)} />}
     </>
   );
 }
