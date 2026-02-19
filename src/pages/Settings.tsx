@@ -150,13 +150,13 @@ export default function Settings({ onLogout }: { onLogout: () => void }) {
             </div>
           )}
 
-          {/* Model usage summary */}
+          {/* Model usage summary — non-interactive badges */}
           <div style={{ display: 'flex', gap: 12, marginBottom: 16, flexWrap: 'wrap' }}>
             {AVAILABLE_MODELS.filter(m => modelCounts[m.id]).map(m => (
               <div key={m.id} style={{
                 padding: '6px 12px', borderRadius: 8, fontSize: 12, fontFamily: 'Fira Code',
                 background: 'var(--bg-card)', border: '1px solid var(--border)',
-                display: 'flex', alignItems: 'center', gap: 6,
+                display: 'flex', alignItems: 'center', gap: 6, userSelect: 'none',
               }}>
                 <span>{m.icon}</span>
                 <span style={{ fontWeight: 600 }}>{m.alias}</span>
