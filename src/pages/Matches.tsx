@@ -10,40 +10,36 @@ const STATUS_STYLES: Record<string, { bg: string; color: string; label: string }
   completed: { bg: 'var(--green-bg)', color: 'var(--green)', label: 'DONE' },
 };
 
-function VsCard({ left, right, label, sublabel, time, date, status, accent }: {
-  left: string; right: string; label: string; sublabel?: string;
+function VsCard({ left, right, label, time, date, status, accent, icon, clickLabel, onClick }: {
+  left: string; right: string; label: string;
   time?: string; date?: string; status?: string; accent?: string;
+  icon?: string; clickLabel?: string; onClick?: () => void;
 }) {
   const st = STATUS_STYLES[status || 'upcoming'];
   return (
-    <div className="card" style={{ cursor: 'default', marginBottom: 12, borderLeft: `3px solid ${accent || 'var(--accent)'}` }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-muted)' }}>{label}</span>
-          {sublabel && <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>• {sublabel}</span>}
+    <div className="card" style={{ cursor: onClick ? 'pointer' : 'default', marginBottom: 0, borderLeft: `3px solid ${accent || 'var(--accent)'}`, padding: 14 }} onClick={onClick}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
+          {icon && <span style={{ fontSize: 14 }}>{icon}</span>}
+          <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{label}</span>
         </div>
         {status && (
-          <span style={{ fontSize: 10, padding: '2px 7px', borderRadius: 4, background: st.bg, color: st.color, fontWeight: 700, fontFamily: 'Fira Code, monospace' }}>
+          <span style={{ fontSize: 9, padding: '2px 6px', borderRadius: 4, background: st.bg, color: st.color, fontWeight: 700, fontFamily: 'Fira Code, monospace', flexShrink: 0 }}>
             {st.label}
           </span>
         )}
       </div>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 14, padding: '8px 0' }}>
-        <div style={{ flex: 1, textAlign: 'right' }}>
-          <div style={{ fontWeight: 700, fontSize: 17 }}>{left}</div>
-        </div>
-        <div style={{
-          fontFamily: 'Fira Code, monospace', fontSize: 11, fontWeight: 700,
-          color: 'var(--red)', padding: '4px 10px', background: 'var(--red-bg)',
-          borderRadius: 6,
-        }}>VS</div>
-        <div style={{ flex: 1, textAlign: 'left' }}>
-          <div style={{ fontWeight: 700, fontSize: 17 }}>{right}</div>
-        </div>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '4px 0' }}>
+        <div style={{ flex: 1, textAlign: 'right', fontWeight: 700, fontSize: 14, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{left}</div>
+        <div style={{ fontFamily: 'Fira Code', fontSize: 9, fontWeight: 700, color: 'var(--red)', padding: '2px 6px', background: 'var(--red-bg)', borderRadius: 4, flexShrink: 0 }}>VS</div>
+        <div style={{ flex: 1, textAlign: 'left', fontWeight: 700, fontSize: 14, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{right}</div>
       </div>
-      <div style={{ display: 'flex', justifyContent: 'center', gap: 16, fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>
-        {date && <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}><Calendar size={12} /> {date}</span>}
-        {time && <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}><Clock size={12} /> {time} GMT+5</span>}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 6 }}>
+        <div style={{ display: 'flex', gap: 10, fontSize: 11, color: 'var(--text-muted)' }}>
+          {date && <span style={{ display: 'flex', alignItems: 'center', gap: 3 }}><Calendar size={10} /> {date.slice(5)}</span>}
+          {time && <span style={{ display: 'flex', alignItems: 'center', gap: 3 }}><Clock size={10} /> {time}</span>}
+        </div>
+        {clickLabel && <span style={{ fontSize: 10, color: 'var(--accent)', fontWeight: 500 }}>{clickLabel}</span>}
       </div>
     </div>
   );
@@ -159,7 +155,7 @@ export default function Matches() {
                   <Calendar size={12} /> {date} {date === today && <span className="badge" style={{ background: 'var(--red-bg)', color: 'var(--red)' }}>TODAY</span>}
                 </div>
                 {ms.map((m: any, i: number) => (
-                  <VsCard key={i} left={m.team1} right={m.team2} label={m.stage} sublabel={m.format} time={m.time} date={m.date} status={m.status} accent={m.status === 'live' ? 'var(--red)' : 'var(--accent)'} />
+                  <VsCard key={i} left={m.team1} right={m.team2} label={m.stage} time={m.time} date={m.date} status={m.status} accent={m.status === 'live' ? 'var(--red)' : 'var(--accent)'} />
                 ))}
               </div>
             ));
@@ -215,7 +211,7 @@ export default function Matches() {
           </div>
           <h3 style={{ fontSize: 15, fontWeight: 600, marginBottom: 14 }}>All Fixtures</h3>
           {calendarMatches.map((m: any, i: number) => (
-            <VsCard key={i} left={m.home} right={m.away} label={m.competition} sublabel={m.venue} time={m.time} date={m.date} accent={m.date === today ? 'var(--red)' : m.competition.includes('UCL') || m.competition.includes('Carabao') || m.competition.includes('Clásico') || m.competition.includes('FA Cup') ? 'var(--yellow)' : 'var(--accent)'} />
+            <VsCard key={i} left={m.home} right={m.away} label={m.competition} time={m.time} date={m.date} accent={m.date === today ? 'var(--red)' : m.competition.includes('UCL') || m.competition.includes('Carabao') || m.competition.includes('Clásico') || m.competition.includes('FA Cup') ? 'var(--yellow)' : 'var(--accent)'} />
           ))}
         </div>
       </>
@@ -232,65 +228,50 @@ export default function Matches() {
       <div className="main-content">
         {loading ? <div className="card-desc">Loading...</div> : (
           <>
-            {/* Next team matches */}
-            {(data.teams || []).map((team: any) => {
-              const next = getNextMatch(team.id);
-              if (!next) return null;
-              return (
-                <div key={team.id} style={{ marginBottom: 4 }}>
-                  <div onClick={() => { setSelectedTeam(team.id); setView('team-calendar'); }}
-                    style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-muted)', marginBottom: 8, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}>
-                    <span style={{ fontSize: 16 }}>{team.icon}</span> {team.name}
-                    <span style={{ fontSize: 11, color: 'var(--accent)', marginLeft: 'auto', fontWeight: 500 }}>Full calendar →</span>
-                  </div>
-                  <VsCard left={next.home} right={next.away} label={next.competition} sublabel={next.venue} time={next.time} date={next.date} accent={next.date === today ? 'var(--red)' : 'var(--accent)'} status={next.date === today ? 'live' : 'upcoming'} />
-                </div>
-              );
-            })}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 12 }}>
+              {/* Team next matches */}
+              {(data.teams || []).map((team: any) => {
+                const next = getNextMatch(team.id);
+                if (!next) return null;
+                return (
+                  <VsCard key={team.id} left={next.home} right={next.away} label={next.competition} icon={team.icon} time={next.time} date={next.date}
+                    accent={next.date === today ? 'var(--red)' : 'var(--accent)'} status={next.date === today ? 'live' : 'upcoming'}
+                    clickLabel="Calendar →" onClick={() => { setSelectedTeam(team.id); setView('team-calendar'); }} />
+                );
+              })}
 
-            {/* Esports highlights */}
-            {tournamentKeys.map(key => {
-              const t = tournaments[key];
-              const match = getTournamentHighlight(key);
-              if (!match) return null;
-              return (
-                <div key={key} style={{ marginBottom: 4 }}>
-                  <div onClick={() => { setSelectedTournament(key); setView('tournament'); }}
-                    style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-muted)', marginBottom: 8, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}>
-                    <span style={{ fontSize: 16 }}>{t.icon}</span> {t.name}
-                    {t.status === 'live' && <span className="badge red" style={{ fontSize: 9 }}>LIVE</span>}
-                    <span style={{ fontSize: 11, color: 'var(--accent)', marginLeft: 'auto', fontWeight: 500 }}>All matches →</span>
-                  </div>
-                  <VsCard left={match.team1} right={match.team2} label={match.stage} sublabel={`${t.game} • ${match.format}`} time={match.time} date={match.date} status={match.status} accent={match.status === 'live' ? 'var(--red)' : 'var(--yellow)'} />
-                </div>
-              );
-            })}
+              {/* Esports highlights */}
+              {tournamentKeys.map(key => {
+                const t = tournaments[key];
+                const match = getTournamentHighlight(key);
+                if (!match) return null;
+                return (
+                  <VsCard key={key} left={match.team1} right={match.team2} label={t.name} icon={t.icon} time={match.time} date={match.date}
+                    status={match.status} accent={match.status === 'live' ? 'var(--red)' : 'var(--yellow)'}
+                    clickLabel="Matches →" onClick={() => { setSelectedTournament(key); setView('tournament'); }} />
+                );
+              })}
 
-            {/* UFC — next 2 */}
-            {nextUfc.length > 0 && (
-              <div style={{ marginBottom: 4 }}>
-                <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-muted)', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
-                  🥊 UFC
-                </div>
-                {nextUfc.map((evt, i) => {
-                  const me = evt.mainEvent || {};
-                  const hasFighters = me.fighter1 && me.fighter1 !== 'TBA';
-                  return hasFighters ? (
-                    <VsCard key={i} left={me.fighter1} right={me.fighter2} label={evt.event} sublabel={me.weightClass} date={evt.date} accent={evt.event.match(/UFC \d/) ? 'var(--yellow)' : 'var(--accent)'} status="upcoming" />
-                  ) : (
-                    <div key={i} className="card" style={{ cursor: 'default', marginBottom: 12, borderLeft: '3px solid var(--border)' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                        <div>
-                          <div style={{ fontWeight: 700, fontSize: 14 }}>{evt.event}</div>
-                          <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>{evt.location.split(',')[0]} • {evt.date}</div>
-                        </div>
-                        <span className="badge yellow">TBA</span>
+              {/* UFC next 2 */}
+              {nextUfc.map((evt, i) => {
+                const me = evt.mainEvent || {};
+                const hasFighters = me.fighter1 && me.fighter1 !== 'TBA';
+                return hasFighters ? (
+                  <VsCard key={`ufc-${i}`} left={me.fighter1} right={me.fighter2} label={evt.event} icon="🥊" date={evt.date}
+                    accent={evt.event.match(/UFC \d/) ? 'var(--yellow)' : 'var(--accent)'} status="upcoming" />
+                ) : (
+                  <div key={`ufc-${i}`} className="card" style={{ cursor: 'default', marginBottom: 0, borderLeft: '3px solid var(--border)', padding: 14 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <div>
+                        <div style={{ fontWeight: 700, fontSize: 13, display: 'flex', alignItems: 'center', gap: 6 }}>🥊 {evt.event}</div>
+                        <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>{evt.location.split(',')[0]} • {evt.date.slice(5)}</div>
                       </div>
+                      <span className="badge yellow">TBA</span>
                     </div>
-                  );
-                })}
-              </div>
-            )}
+                  </div>
+                );
+              })}
+            </div>
 
             {/* Add team */}
             <div style={{ marginTop: 16 }}>
