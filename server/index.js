@@ -320,36 +320,46 @@ app.get('/api/agents', (req, res) => {
   res.json({ ok: true, agents });
 });
 
-// Cron jobs
+// Cron jobs — scan all possible locations
 app.get('/api/cron', (req, res) => {
+  let jobs = [];
   try {
-    // Read cron jobs from OpenClaw's cron store
-    const cronDir = '/Users/akrom/.openclaw/agents/main/agent';
-    const files = fs.readdirSync(cronDir).filter(f => f.includes('cron') || f.endsWith('.json'));
-    
-    // Try reading the cron store directly
-    let jobs = [];
-    const cronStorePath = path.join(cronDir, 'cron-jobs.json');
-    if (fs.existsSync(cronStorePath)) {
-      jobs = JSON.parse(fs.readFileSync(cronStorePath, 'utf8'));
-    }
-    
-    // Also check the gateway's cron state
-    const gatewayPaths = [
+    const searchPaths = [
+      '/Users/akrom/.openclaw/cron/jobs.json',
       '/Users/akrom/.openclaw/cron-jobs.json',
       '/Users/akrom/.openclaw/state/cron-jobs.json',
     ];
-    for (const p of gatewayPaths) {
+    
+    // Also search recursively in .openclaw for any cron files
+    const findCronFiles = (dir, depth = 0) => {
+      if (depth > 3) return [];
+      const results = [];
+      try {
+        const entries = fs.readdirSync(dir, { withFileTypes: true });
+        for (const e of entries) {
+          const full = path.join(dir, e.name);
+          if (e.isFile() && e.name.includes('cron') && e.name.endsWith('.json')) results.push(full);
+          if (e.isDirectory() && !e.name.startsWith('.') && e.name !== 'node_modules') {
+            results.push(...findCronFiles(full, depth + 1));
+          }
+        }
+      } catch {}
+      return results;
+    };
+    
+    const allPaths = [...new Set([...searchPaths, ...findCronFiles('/Users/akrom/.openclaw')])];
+    
+    for (const p of allPaths) {
       if (fs.existsSync(p)) {
         try {
           const data = JSON.parse(fs.readFileSync(p, 'utf8'));
-          if (Array.isArray(data)) jobs = data;
-          else if (data.jobs) jobs = data.jobs;
+          if (Array.isArray(data) && data.length > 0) { jobs = data; break; }
+          if (data.jobs && data.jobs.length > 0) { jobs = data.jobs; break; }
         } catch {}
       }
     }
 
-    res.json({ ok: true, jobs });
+    res.json({ ok: true, jobs, scanned: allPaths.filter(p => fs.existsSync(p)) });
   } catch (err) {
     res.json({ ok: true, jobs: [], error: err.message });
   }
