@@ -449,6 +449,17 @@ export default function MissionControl() {
                     onMouseEnter={e => (e.currentTarget.style.boxShadow = 'var(--shadow-lg)')}
                     onMouseLeave={e => (e.currentTarget.style.boxShadow = 'none')}
                   >
+                    {isInProgress && (
+                      <div style={{
+                        display: 'flex', alignItems: 'center', gap: 6, padding: '4px 8px', marginBottom: 8,
+                        background: 'var(--accent-glow)', borderRadius: 6, fontSize: 11, fontWeight: 700,
+                        color: 'var(--accent)',
+                      }}>
+                        <span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: '50%', border: '2px solid var(--accent)', borderTopColor: 'transparent', animation: 'spin 0.8s linear infinite' }} />
+                        Agent working...
+                      </div>
+                    )}
+
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                       <div style={{ fontSize: 13, fontWeight: 600, lineHeight: 1.4, flex: 1 }}>{task.title}</div>
                       <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
