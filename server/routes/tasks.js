@@ -54,6 +54,30 @@ router.post('/api/tasks', async (req, res) => {
   res.json({ ok: true, task });
 });
 
+// Archive done tasks — returns summary and removes them (MUST be before :id routes)
+router.post('/api/tasks/archive', async (req, res) => {
+  const data = await readTasks();
+  const doneTasks = data.tasks.filter(t => t.status === 'done' || t.status === 'failed');
+  if (doneTasks.length === 0) return res.json({ ok: true, archived: 0, summary: 'No completed tasks to archive.' });
+
+  const lines = doneTasks.map(t => {
+    const status = t.status === 'done' ? '✅' : '❌';
+    const duration = t.completedAt && t.createdAt
+      ? Math.round((new Date(t.completedAt) - new Date(t.createdAt)) / 60000) + 'm'
+      : '?';
+    return `${status} #${t.id} ${t.title} (${t.assignedTo || 'unassigned'}, ${duration})${t.result ? '\n   → ' + t.result.slice(0, 100) : ''}`;
+  });
+  const summary = `📋 Daily Task Report — ${new Date().toISOString().split('T')[0]}\n\n${lines.join('\n\n')}\n\n📊 Total: ${doneTasks.length} tasks (${doneTasks.filter(t => t.status === 'done').length} passed, ${doneTasks.filter(t => t.status === 'failed').length} failed)`;
+
+  data.tasks = data.tasks.filter(t => t.status !== 'done' && t.status !== 'failed');
+  await writeTasks(data);
+
+  const archivePath = path.join(path.dirname(TASKS_PATH), `tasks-archive-${new Date().toISOString().split('T')[0]}.json`);
+  await fs.writeFile(archivePath, JSON.stringify(doneTasks, null, 2));
+
+  res.json({ ok: true, archived: doneTasks.length, summary });
+});
+
 const ALLOWED_FIELDS = ['status', 'assignedTo', 'result', 'sessionId', 'rounds', 'priority', 'title', 'description', 'model', 'parentTaskId', 'pipelineRound'];
 
 async function updateTask(req, res) {
@@ -107,33 +131,6 @@ router.post('/api/tasks/:id/complete', async (req, res) => {
   task.result = req.body.result || null;
   await writeTasks(data);
   res.json({ ok: true, task });
-});
-
-// Archive done tasks — returns summary and removes them
-router.post('/api/tasks/archive', async (req, res) => {
-  const data = await readTasks();
-  const doneTasks = data.tasks.filter(t => t.status === 'done' || t.status === 'failed');
-  if (doneTasks.length === 0) return res.json({ ok: true, archived: 0, summary: 'No completed tasks to archive.' });
-
-  // Build summary
-  const lines = doneTasks.map(t => {
-    const status = t.status === 'done' ? '✅' : '❌';
-    const duration = t.completedAt && t.createdAt
-      ? Math.round((new Date(t.completedAt) - new Date(t.createdAt)) / 60000) + 'm'
-      : '?';
-    return `${status} #${t.id} ${t.title} (${t.assignedTo || 'unassigned'}, ${duration})${t.result ? '\n   → ' + t.result.slice(0, 100) : ''}`;
-  });
-  const summary = `📋 Daily Task Report — ${new Date().toISOString().split('T')[0]}\n\n${lines.join('\n\n')}\n\n📊 Total: ${doneTasks.length} tasks (${doneTasks.filter(t => t.status === 'done').length} passed, ${doneTasks.filter(t => t.status === 'failed').length} failed)`;
-
-  // Remove done/failed tasks
-  data.tasks = data.tasks.filter(t => t.status !== 'done' && t.status !== 'failed');
-  await writeTasks(data);
-
-  // Save archive to memory
-  const archivePath = path.join(path.dirname(TASKS_PATH), `tasks-archive-${new Date().toISOString().split('T')[0]}.json`);
-  await fs.writeFile(archivePath, JSON.stringify(doneTasks, null, 2));
-
-  res.json({ ok: true, archived: doneTasks.length, summary });
 });
 
 module.exports = router;

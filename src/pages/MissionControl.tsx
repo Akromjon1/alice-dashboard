@@ -386,6 +386,33 @@ export default function MissionControl() {
         </div>
       </div>
 
+      {/* Running Agents Banner */}
+      {agents.filter(a => isAgentWorking(a.name)).length > 0 && (
+        <div style={{
+          display: 'flex', gap: 10, padding: '10px 16px', background: 'linear-gradient(90deg, var(--green-bg), var(--accent-glow))',
+          borderBottom: '1px solid var(--green)', alignItems: 'center', flexWrap: 'wrap',
+        }}>
+          <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--green)', textTransform: 'uppercase', letterSpacing: 1 }}>⚡ Working Now</span>
+          {agents.filter(a => isAgentWorking(a.name)).map(agent => {
+            const currentTask = getAgentCurrentTask(agent.name);
+            return (
+              <div key={agent.id} style={{
+                display: 'flex', alignItems: 'center', gap: 8, padding: '6px 14px',
+                background: 'var(--bg-card)', border: '1px solid var(--green)',
+                borderRadius: 10, fontSize: 13,
+              }}>
+                <span className="pulse-animation" style={{ fontSize: 16 }}>{agent.icon}</span>
+                <div>
+                  <div style={{ fontWeight: 700, color: 'var(--text)' }}>{agent.name}</div>
+                  {currentTask && <div style={{ fontSize: 11, color: 'var(--text-muted)', maxWidth: 250, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>📋 {currentTask}</div>}
+                </div>
+                <div className="pulse-animation" style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--green)', marginLeft: 4 }} />
+              </div>
+            );
+          })}
+        </div>
+      )}
+
       {/* Kanban Board - Full Width */}
       <div style={{ flex: 1, display: 'flex', gap: 1, overflowX: 'auto', padding: '16px 12px', background: 'var(--bg)' }}>
         {COLUMNS.map(col => (
