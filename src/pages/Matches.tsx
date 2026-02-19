@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { getMatches, addTeam } from '../api';
+import { getMatches, addTeam, getUfc } from '../api';
 import { Trophy, Plus, X, Shield, ChevronLeft, ChevronRight, Calendar, Clock, MapPin, Gamepad2 } from 'lucide-react';
 
 type View = 'overview' | 'team-calendar' | 'tournament';
@@ -12,6 +12,7 @@ const STATUS_STYLES: Record<string, { bg: string; color: string; label: string }
 
 export default function Matches() {
   const [data, setData] = useState<any>({});
+  const [ufcEvents, setUfcEvents] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [view, setView] = useState<View>('overview');
   const [selectedTeam, setSelectedTeam] = useState('');
@@ -22,7 +23,15 @@ export default function Matches() {
   const [showAdd, setShowAdd] = useState(false);
   const [newTeam, setNewTeam] = useState({ name: '', league: '' });
 
-  const refresh = () => { getMatches().then(d => setData(d)).catch(() => {}).finally(() => setLoading(false)); };
+  const refresh = () => {
+    Promise.all([
+      getMatches().catch(() => ({})),
+      getUfc().catch(() => ({ events: [] })),
+    ]).then(([d, u]) => {
+      setData(d);
+      setUfcEvents(u.events || []);
+    }).finally(() => setLoading(false));
+  };
   useEffect(() => { refresh(); }, []);
 
   const handleAdd = async () => {
@@ -332,7 +341,76 @@ export default function Matches() {
               })}
             </div>
 
-            {tournamentKeys.length === 0 && (
+            {/* UFC */}
+            {ufcEvents.length > 0 && (
+              <>
+                <h3 style={{ fontSize: 14, fontWeight: 700, marginBottom: 12, display: 'flex', alignItems: 'center', gap: 6, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                  🥊 UFC
+                </h3>
+                <div style={{ display: 'flex', gap: 12, overflowX: 'auto', paddingBottom: 8, marginBottom: 28 }}>
+                  {ufcEvents.map((evt: any, i: number) => {
+                    const isNumbered = evt.event.startsWith('UFC ') && /UFC \d/.test(evt.event);
+                    const isPast = evt.date < today;
+                    const isNext = !isPast && (i === 0 || ufcEvents[i - 1]?.date < today);
+                    const me = evt.mainEvent || {};
+                    const hasFighters = me.fighter1 && me.fighter1 !== 'TBA';
+                    return (
+                      <div key={i} className="card" style={{
+                        cursor: 'default', minWidth: 280, maxWidth: 320, marginBottom: 0,
+                        opacity: isPast ? 0.5 : 1, flexShrink: 0,
+                        borderTop: isNumbered ? '3px solid var(--yellow)' : isNext ? '3px solid var(--accent)' : '3px solid var(--border)',
+                      }}>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+                          <span style={{
+                            fontFamily: 'Fira Code, monospace', fontSize: isNumbered ? 16 : 13,
+                            fontWeight: 700, color: isNumbered ? 'var(--yellow)' : 'var(--text)',
+                          }}>
+                            {evt.event}
+                          </span>
+                          {isNext && <span className="badge" style={{ background: 'var(--accent-glow)', color: 'var(--accent)' }}>NEXT</span>}
+                        </div>
+
+                        {/* Main Event */}
+                        {hasFighters ? (
+                          <div style={{
+                            background: 'var(--bg)', borderRadius: 10, padding: 14, marginBottom: 10,
+                            textAlign: 'center',
+                          }}>
+                            <div style={{ fontSize: 10, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 8, fontWeight: 600 }}>
+                              Main Event • {me.weightClass}
+                            </div>
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12 }}>
+                              <div style={{ flex: 1, textAlign: 'right' }}>
+                                <div style={{ fontWeight: 700, fontSize: 15 }}>{me.fighter1}</div>
+                              </div>
+                              <div style={{
+                                fontFamily: 'Fira Code, monospace', fontSize: 12, fontWeight: 700,
+                                color: 'var(--red)', padding: '4px 10px', background: 'var(--red-bg)',
+                                borderRadius: 6,
+                              }}>VS</div>
+                              <div style={{ flex: 1, textAlign: 'left' }}>
+                                <div style={{ fontWeight: 700, fontSize: 15 }}>{me.fighter2}</div>
+                              </div>
+                            </div>
+                          </div>
+                        ) : (
+                          <div style={{ background: 'var(--bg)', borderRadius: 10, padding: 14, marginBottom: 10, textAlign: 'center' }}>
+                            <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>Fight card TBA</div>
+                          </div>
+                        )}
+
+                        <div style={{ display: 'flex', gap: 12, fontSize: 12, color: 'var(--text-muted)' }}>
+                          <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}><Calendar size={12} /> {evt.date}</span>
+                          <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}><MapPin size={12} /> {evt.location.split(',')[0]}</span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </>
+            )}
+
+            {tournamentKeys.length === 0 && ufcEvents.length === 0 && (
               <div className="card" style={{ cursor: 'default', textAlign: 'center', padding: 40 }}>
                 <Gamepad2 size={32} style={{ color: 'var(--text-muted)', marginBottom: 12 }} />
                 <div className="card-desc">No active tournaments. Data updates at 6 AM & 10 AM daily.</div>

@@ -376,6 +376,16 @@ app.get('/api/matches', (req, res) => {
   }
 });
 
+app.get('/api/ufc', (req, res) => {
+  const matchesPath = path.join(WORKSPACE, 'data/matches.json');
+  try {
+    const data = JSON.parse(fs.readFileSync(matchesPath, 'utf8'));
+    res.json({ ok: true, events: data.ufc || [] });
+  } catch {
+    res.json({ ok: true, events: [] });
+  }
+});
+
 app.post('/api/matches/team', (req, res) => {
   const { name, league } = req.body;
   if (!name) return res.status(400).json({ error: 'Missing team name' });

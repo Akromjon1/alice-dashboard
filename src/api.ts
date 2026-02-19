@@ -71,3 +71,4 @@ export const getCronJobs = () => api.get('/api/cron');
 export const getMatches = () => api.get('/api/matches');
 export const addTeam = (name: string, league: string) => api.post('/api/matches/team', { name, league });
 export const removeTeam = (name: string) => api.del('/api/matches/team', { name });
+export const getUfc = () => api.get('/api/ufc');
