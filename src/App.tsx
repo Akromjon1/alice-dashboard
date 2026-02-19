@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { isConfigured } from './api';
-import { LayoutDashboard, Bot, Puzzle, Settings as SettingsIcon, LogOut } from 'lucide-react';
+import { LayoutDashboard, Bot, Puzzle, Settings as SettingsIcon } from 'lucide-react';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
 import Agents from './pages/Agents';

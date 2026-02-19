@@ -1,12 +1,11 @@
 import { useEffect, useState } from 'react';
 import { getSessionsList, getSessionHistory, sendToSession } from '../api';
 import { Bot, Send, ArrowLeft } from 'lucide-react';
-import { Message } from '../types';
 
 export default function Agents() {
   const [sessions, setSessions] = useState<any[]>([]);
   const [selected, setSelected] = useState<string | null>(null);
-  const [messages, setMessages] = useState<Message[]>([]);
+  const [messages, setMessages] = useState<any[]>([]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);

@@ -1,4 +1,7 @@
-import { AppConfig } from './types';
+interface AppConfig {
+  gatewayUrl: string;
+  apiToken: string;
+}
 
 const getConfig = (): AppConfig | null => {
   const raw = localStorage.getItem('alice-config');
