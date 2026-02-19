@@ -365,27 +365,24 @@ export default function MissionControl() {
 
         {/* Agent status indicators */}
         <div style={{ width: 1, height: 24, background: 'var(--border)', marginLeft: 4 }} />
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          {agents.map(agent => {
-            const working = isAgentWorking(agent.name);
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+          {agents.filter(a => isAgentWorking(a.name)).map(agent => {
             const currentTask = getAgentCurrentTask(agent.name);
             return (
-              <div key={agent.id} title={`${agent.name}${currentTask ? '\n📋 ' + currentTask : ''}`} style={{
-                width: 30, height: 30, borderRadius: '50%', background: 'var(--border)',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                fontSize: 14, position: 'relative', cursor: 'default',
-                opacity: working ? 1 : 0.5,
+              <div key={agent.id} style={{
+                display: 'flex', alignItems: 'center', gap: 6, padding: '4px 10px',
+                background: 'var(--green-bg)', border: '1px solid var(--green)',
+                borderRadius: 20, fontSize: 12, fontWeight: 600,
               }}>
-                {agent.icon}
-                <div style={{
-                  position: 'absolute', bottom: -1, right: -1, width: 9, height: 9,
-                  borderRadius: '50%', background: working ? 'var(--green)' : 'var(--text-muted)',
-                  border: '2px solid var(--bg-card)',
-                  animation: working ? 'pulse 1.5s ease-in-out infinite' : 'none',
-                }} />
+                <span className="pulse-animation" style={{ fontSize: 14 }}>{agent.icon}</span>
+                <span style={{ color: 'var(--green)' }}>{agent.name}</span>
+                {currentTask && <span style={{ color: 'var(--text-muted)', fontSize: 10, maxWidth: 120, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{currentTask}</span>}
               </div>
             );
           })}
+          {agents.filter(a => !isAgentWorking(a.name)).length === agents.length && (
+            <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>All agents idle</span>
+          )}
         </div>
       </div>
 
