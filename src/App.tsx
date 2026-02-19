@@ -1,6 +1,6 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { isConfigured } from './api';
-import { LayoutDashboard, Bot, Puzzle, Settings as SettingsIcon } from 'lucide-react';
+import { LayoutDashboard, Bot, Puzzle, Settings as SettingsIcon, Sun, Moon } from 'lucide-react';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
 import Agents from './pages/Agents';
@@ -12,6 +12,14 @@ type Page = 'dashboard' | 'agents' | 'skills' | 'settings';
 export default function App() {
   const [loggedIn, setLoggedIn] = useState(isConfigured());
   const [page, setPage] = useState<Page>('dashboard');
+  const [theme, setTheme] = useState<'dark' | 'light'>(() => {
+    return (localStorage.getItem('alice-theme') as 'dark' | 'light') || 'dark';
+  });
+
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', theme);
+    localStorage.setItem('alice-theme', theme);
+  }, [theme]);
 
   if (!loggedIn) {
     return <Login onLogin={() => setLoggedIn(true)} />;
@@ -37,8 +45,11 @@ export default function App() {
     <div className="app">
       <div className="sidebar">
         <div className="sidebar-header">
-          <h1>🤖 Alice</h1>
-          <div className="status online">● Connected</div>
+          <h1>⚡ Alice</h1>
+          <div className="status online">
+            <span className="status-pulse" />
+            Connected
+          </div>
         </div>
         {nav.map(item => (
           <div
@@ -50,6 +61,15 @@ export default function App() {
             {item.label}
           </div>
         ))}
+        <div className="sidebar-footer">
+          <div
+            className="theme-toggle"
+            onClick={() => setTheme(t => t === 'dark' ? 'light' : 'dark')}
+          >
+            {theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
+            {theme === 'dark' ? 'Light Mode' : 'Dark Mode'}
+          </div>
+        </div>
       </div>
       <div className="main">
         {renderPage()}

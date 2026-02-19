@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { getStatus, getSkills, getNotes } from '../api';
-import { FileText, Puzzle, Zap, Cpu, HardDrive, MemoryStick } from 'lucide-react';
+import { FileText, Puzzle, Zap, Cpu, HardDrive, MemoryStick, Clock } from 'lucide-react';
 
 export default function Dashboard() {
   const [skills, setSkills] = useState<any[]>([]);
@@ -22,87 +22,111 @@ export default function Dashboard() {
 
   useEffect(() => {
     refresh();
-    const interval = setInterval(refresh, 15000); // refresh every 15s
+    const interval = setInterval(refresh, 15000);
     return () => clearInterval(interval);
   }, []);
 
-  if (loading) return <><div className="main-header">Dashboard</div><div className="main-content"><div className="card-desc">Loading...</div></div></>;
+  const ramPercent = system?.ram ? parseFloat(system.ram.percent) : 0;
+  const ramColor = ramPercent > 80 ? 'var(--red)' : ramPercent > 60 ? 'var(--yellow)' : 'var(--green)';
+
+  if (loading) {
+    return (
+      <>
+        <div className="main-header">Dashboard</div>
+        <div className="main-content">
+          <div className="card-desc">Loading...</div>
+        </div>
+      </>
+    );
+  }
 
   return (
     <>
       <div className="main-header">Dashboard</div>
       <div className="main-content">
         <div className="grid">
+          {/* Status */}
           <div className="card" style={{ cursor: 'default' }}>
             <div className="card-header">
-              <div className="card-title"><Zap size={16} /> Status</div>
+              <div className="card-title"><Zap size={14} /> Status</div>
+              <span className="badge green">live</span>
             </div>
-            <div style={{ fontSize: 28, fontWeight: 700, color: 'var(--green)' }}>Online</div>
+            <div className="card-value" style={{ color: 'var(--green)' }}>Online</div>
           </div>
 
+          {/* RAM */}
           {system?.ram && (
             <div className="card" style={{ cursor: 'default' }}>
               <div className="card-header">
-                <div className="card-title"><MemoryStick size={16} /> RAM</div>
-                <span className={`badge ${parseFloat(system.ram.percent) > 80 ? 'red' : parseFloat(system.ram.percent) > 60 ? 'yellow' : 'green'}`}>
+                <div className="card-title"><MemoryStick size={14} /> Memory</div>
+                <span className={`badge ${ramPercent > 80 ? 'red' : ramPercent > 60 ? 'yellow' : 'green'}`}>
                   {system.ram.percent}%
                 </span>
               </div>
-              <div style={{ fontSize: 24, fontWeight: 700 }}>{system.ram.usedGB} / {system.ram.totalGB} GB</div>
-              <div style={{ marginTop: 8, height: 6, background: 'var(--border)', borderRadius: 3, overflow: 'hidden' }}>
-                <div style={{ height: '100%', width: `${system.ram.percent}%`, background: parseFloat(system.ram.percent) > 80 ? 'var(--red)' : 'var(--accent)', borderRadius: 3, transition: 'width 0.3s' }} />
+              <div className="card-value">{system.ram.usedGB}<span style={{ fontSize: 14, fontWeight: 400, color: 'var(--text-muted)' }}> / {system.ram.totalGB} GB</span></div>
+              <div className="progress-bar">
+                <div className="progress-fill" style={{ width: `${system.ram.percent}%`, background: ramColor }} />
               </div>
             </div>
           )}
 
+          {/* CPU */}
           {system?.cpu && (
             <div className="card" style={{ cursor: 'default' }}>
               <div className="card-header">
-                <div className="card-title"><Cpu size={16} /> CPU</div>
+                <div className="card-title"><Cpu size={14} /> CPU</div>
               </div>
-              <div style={{ fontSize: 24, fontWeight: 700 }}>{system.cpu.usage}</div>
+              <div className="card-value">{system.cpu.usage}</div>
             </div>
           )}
 
+          {/* Disk */}
           {system?.disk && (
             <div className="card" style={{ cursor: 'default' }}>
               <div className="card-header">
-                <div className="card-title"><HardDrive size={16} /> Disk</div>
+                <div className="card-title"><HardDrive size={14} /> Disk</div>
               </div>
-              <div style={{ fontSize: 24, fontWeight: 700 }}>{system.disk.freeGB} GB free</div>
-              <div className="card-desc">{system.disk.usedGB} / {system.disk.totalGB} GB used</div>
+              <div className="card-value">{system.disk.freeGB}<span style={{ fontSize: 14, fontWeight: 400, color: 'var(--text-muted)' }}> GB free</span></div>
+              <div className="card-desc" style={{ marginTop: 4 }}>{system.disk.usedGB} / {system.disk.totalGB} GB used</div>
             </div>
           )}
 
+          {/* Skills */}
           <div className="card" style={{ cursor: 'default' }}>
             <div className="card-header">
-              <div className="card-title"><Puzzle size={16} /> Skills</div>
+              <div className="card-title"><Puzzle size={14} /> Skills</div>
             </div>
-            <div style={{ fontSize: 28, fontWeight: 700 }}>{skills.length}</div>
+            <div className="card-value">{skills.length}</div>
           </div>
 
+          {/* Notes */}
           <div className="card" style={{ cursor: 'default' }}>
             <div className="card-header">
-              <div className="card-title"><FileText size={16} /> Notes</div>
+              <div className="card-title"><FileText size={14} /> Notes</div>
             </div>
-            <div style={{ fontSize: 28, fontWeight: 700 }}>{notes.length}</div>
+            <div className="card-value">{notes.length}</div>
           </div>
         </div>
 
+        {/* Uptime */}
         {system?.uptime && (
-          <div style={{ color: 'var(--text-muted)', fontSize: 12, marginTop: 16 }}>
+          <div className="uptime-bar">
+            <Clock size={12} style={{ display: 'inline', verticalAlign: 'middle', marginRight: 6 }} />
             {system.uptime}
           </div>
         )}
 
-        <h3 style={{ marginTop: 24, marginBottom: 12 }}>Recent Notes</h3>
+        {/* Recent Notes */}
+        <h3 style={{ marginTop: 28, marginBottom: 14, fontSize: 15, fontWeight: 600 }}>Recent Notes</h3>
         {notes.length === 0 ? (
           <div className="card-desc">No notes yet</div>
         ) : (
           notes.slice(0, 5).map((n: any) => (
             <div key={n.name} className="card" style={{ cursor: 'default' }}>
               <div className="card-header">
-                <div className="card-title"><FileText size={16} /> {n.name}</div>
+                <div className="card-title" style={{ textTransform: 'none', letterSpacing: 0 }}>
+                  <FileText size={14} /> {n.name}
+                </div>
                 <span className="badge green">{n.date}</span>
               </div>
               <div className="card-desc" style={{ whiteSpace: 'pre-wrap' }}>
