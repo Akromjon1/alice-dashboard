@@ -4,6 +4,7 @@ const cors = require('cors');
 const WebSocket = require('ws');
 const fs = require('fs');
 const path = require('path');
+const { execSync } = require('child_process');
 
 const app = express();
 const PORT = process.env.PORT || 3456;
@@ -56,13 +57,42 @@ function ocRpc(method, params = {}) {
   });
 }
 
+// System stats
+function getSystemStats() {
+  try {
+    const totalMem = parseInt(execSync('/usr/sbin/sysctl -n hw.memsize').toString().trim());
+    const vmStat = execSync('/usr/bin/vm_stat').toString();
+    const pageSize = 16384;
+    const parse = (key) => {
+      const m = vmStat.match(new RegExp(`${key}:\\s+(\\d+)`));
+      return m ? parseInt(m[1]) * pageSize : 0;
+    };
+    const free = parse('Pages free') + parse('Pages purgeable');
+    const used = totalMem - free;
+    const cpu = execSync("/usr/bin/top -l 1 -n 0 | grep 'CPU usage'").toString().trim();
+    const cpuMatch = cpu.match(/([\d.]+)% idle/);
+    const cpuUsage = cpuMatch ? (100 - parseFloat(cpuMatch[1])).toFixed(1) : '?';
+    const disk = execSync("/bin/df -g / | tail -1").toString().trim().split(/\s+/);
+    const uptime = execSync('/usr/bin/uptime').toString().trim();
+
+    return {
+      ram: { total: totalMem, used, free, totalGB: (totalMem / 1073741824).toFixed(1), usedGB: (used / 1073741824).toFixed(1), freeGB: (free / 1073741824).toFixed(1), percent: ((used / totalMem) * 100).toFixed(1) },
+      cpu: { usage: cpuUsage + '%' },
+      disk: { totalGB: disk[1], usedGB: disk[2], freeGB: disk[3] },
+      uptime,
+    };
+  } catch { return null; }
+}
+
 // Status endpoint (used for login validation)
 app.get('/api/status', (req, res) => {
-  res.json({ ok: true, agent: 'Alice', status: 'online', timestamp: new Date().toISOString() });
+  const stats = getSystemStats();
+  res.json({ ok: true, agent: 'Alice', status: 'online', timestamp: new Date().toISOString(), system: stats });
 });
 
 app.post('/api/status', (req, res) => {
-  res.json({ ok: true, agent: 'Alice', status: 'online', timestamp: new Date().toISOString() });
+  const stats = getSystemStats();
+  res.json({ ok: true, agent: 'Alice', status: 'online', timestamp: new Date().toISOString(), system: stats });
 });
 
 // Sessions list
