@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { isConfigured } from './api';
-import { LayoutDashboard, Bot, Puzzle, Settings as SettingsIcon, Sun, Moon, Youtube, Crosshair } from 'lucide-react';
+import { LayoutDashboard, Bot, Puzzle, Settings as SettingsIcon, Sun, Moon, Youtube, Crosshair, Trophy, Clock } from 'lucide-react';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
 import MissionControl from './pages/MissionControl';
@@ -8,8 +8,10 @@ import Agents from './pages/Agents';
 import Skills from './pages/Skills';
 import Settings from './pages/Settings';
 import YouTubePage from './pages/YouTube';
+import Matches from './pages/Matches';
+import CronJobs from './pages/CronJobs';
 
-type Page = 'mission' | 'dashboard' | 'agents' | 'youtube' | 'skills' | 'settings';
+type Page = 'mission' | 'dashboard' | 'agents' | 'matches' | 'youtube' | 'cron' | 'skills' | 'settings';
 
 export default function App() {
   const [loggedIn, setLoggedIn] = useState(isConfigured());
@@ -31,7 +33,9 @@ export default function App() {
     { id: 'mission' as Page, label: 'Mission Control', icon: Crosshair },
     { id: 'dashboard' as Page, label: 'System', icon: LayoutDashboard },
     { id: 'agents' as Page, label: 'Agents', icon: Bot },
+    { id: 'matches' as Page, label: 'Matches', icon: Trophy },
     { id: 'youtube' as Page, label: 'YouTube', icon: Youtube },
+    { id: 'cron' as Page, label: 'Cron Jobs', icon: Clock },
     { id: 'skills' as Page, label: 'Skills', icon: Puzzle },
     { id: 'settings' as Page, label: 'Settings', icon: SettingsIcon },
   ];
@@ -41,7 +45,9 @@ export default function App() {
       case 'mission': return <MissionControl />;
       case 'dashboard': return <Dashboard />;
       case 'agents': return <Agents />;
+      case 'matches': return <Matches />;
       case 'youtube': return <YouTubePage />;
+      case 'cron': return <CronJobs />;
       case 'skills': return <Skills />;
       case 'settings': return <Settings onLogout={() => setLoggedIn(false)} />;
     }

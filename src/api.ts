@@ -67,3 +67,7 @@ export const removeYoutubeChannel = (url: string) => api.del('/api/youtube/chann
 export const addYoutubeVideo = (title: string, url: string) => api.post('/api/youtube/video', { title, url });
 export const saveNote = (filename: string, content: string) => api.post('/api/notes', { filename, content });
 export const sendChat = (message: string) => api.post('/api/chat', { message });
+export const getCronJobs = () => api.get('/api/cron');
+export const getMatches = () => api.get('/api/matches');
+export const addTeam = (name: string, league: string) => api.post('/api/matches/team', { name, league });
+export const removeTeam = (name: string) => api.del('/api/matches/team', { name });

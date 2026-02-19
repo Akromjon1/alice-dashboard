@@ -281,6 +281,28 @@ app.get('/api/agents', (req, res) => {
     });
   } catch {}
 
+  // Check matches
+  try {
+    const matches = JSON.parse(fs.readFileSync(path.join(WORKSPACE, 'data/matches.json'), 'utf8'));
+    agents.push({
+      id: 'matches-agent',
+      name: 'Matches Agent',
+      type: 'watcher',
+      status: matches.teams?.length > 0 ? 'running' : 'stopped',
+      description: `Tracking ${matches.teams?.length || 0} teams`,
+      lastActive: matches.teams?.[matches.teams.length - 1]?.addedAt || 'unknown',
+    });
+  } catch {
+    agents.push({
+      id: 'matches-agent',
+      name: 'Matches Agent',
+      type: 'watcher',
+      status: 'stopped',
+      description: 'No teams tracked yet',
+      lastActive: 'never',
+    });
+  }
+
   // Check heartbeat
   try {
     const hb = fs.readFileSync(path.join(WORKSPACE, 'HEARTBEAT.md'), 'utf8');
@@ -296,6 +318,77 @@ app.get('/api/agents', (req, res) => {
   } catch {}
 
   res.json({ ok: true, agents });
+});
+
+// Cron jobs
+app.get('/api/cron', (req, res) => {
+  try {
+    // Read cron jobs from OpenClaw's cron store
+    const cronDir = '/Users/akrom/.openclaw/agents/main/agent';
+    const files = fs.readdirSync(cronDir).filter(f => f.includes('cron') || f.endsWith('.json'));
+    
+    // Try reading the cron store directly
+    let jobs = [];
+    const cronStorePath = path.join(cronDir, 'cron-jobs.json');
+    if (fs.existsSync(cronStorePath)) {
+      jobs = JSON.parse(fs.readFileSync(cronStorePath, 'utf8'));
+    }
+    
+    // Also check the gateway's cron state
+    const gatewayPaths = [
+      '/Users/akrom/.openclaw/cron-jobs.json',
+      '/Users/akrom/.openclaw/state/cron-jobs.json',
+    ];
+    for (const p of gatewayPaths) {
+      if (fs.existsSync(p)) {
+        try {
+          const data = JSON.parse(fs.readFileSync(p, 'utf8'));
+          if (Array.isArray(data)) jobs = data;
+          else if (data.jobs) jobs = data.jobs;
+        } catch {}
+      }
+    }
+
+    res.json({ ok: true, jobs });
+  } catch (err) {
+    res.json({ ok: true, jobs: [], error: err.message });
+  }
+});
+
+// Matches data
+app.get('/api/matches', (req, res) => {
+  const matchesPath = path.join(WORKSPACE, 'data/matches.json');
+  try {
+    const data = JSON.parse(fs.readFileSync(matchesPath, 'utf8'));
+    res.json({ ok: true, ...data });
+  } catch {
+    res.json({ ok: true, matches: [], teams: [] });
+  }
+});
+
+app.post('/api/matches/team', (req, res) => {
+  const { name, league } = req.body;
+  if (!name) return res.status(400).json({ error: 'Missing team name' });
+  const matchesPath = path.join(WORKSPACE, 'data/matches.json');
+  let data = { teams: [], matches: [] };
+  try { data = JSON.parse(fs.readFileSync(matchesPath, 'utf8')); } catch {}
+  if (!data.teams) data.teams = [];
+  data.teams.push({ name, league: league || '', addedAt: new Date().toISOString().split('T')[0] });
+  const dataDir = path.dirname(matchesPath);
+  if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
+  fs.writeFileSync(matchesPath, JSON.stringify(data, null, 2));
+  res.json({ ok: true });
+});
+
+app.delete('/api/matches/team', (req, res) => {
+  const { name } = req.body;
+  const matchesPath = path.join(WORKSPACE, 'data/matches.json');
+  try {
+    const data = JSON.parse(fs.readFileSync(matchesPath, 'utf8'));
+    data.teams = (data.teams || []).filter(t => t.name !== name);
+    fs.writeFileSync(matchesPath, JSON.stringify(data, null, 2));
+    res.json({ ok: true });
+  } catch { res.status(500).json({ error: 'Failed' }); }
 });
 
 app.listen(PORT, '0.0.0.0', () => {
