@@ -5,6 +5,17 @@ const { CONFIG_PATH, SKILLS_DIR } = require('../lib/paths');
 const path = require('path');
 const fsSync = require('fs');
 
+// Tunnel URL endpoint (no auth needed for login page)
+router.get('/api/tunnel-url', async (req, res) => {
+  try {
+    const urlFile = path.join(__dirname, '../../..', '.openclaw/workspace/data/tunnel-url.txt');
+    const url = (await fs.readFile(urlFile, 'utf8')).trim();
+    res.json({ ok: true, url });
+  } catch {
+    res.json({ ok: false, url: null });
+  }
+});
+
 // Status endpoint (used for login validation)
 router.get('/api/status', async (req, res) => {
   const stats = await getSystemStats();
