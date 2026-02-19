@@ -93,3 +93,7 @@ export const deleteTaskApi = (id: number) => api.del(`/api/tasks/${id}`);
 export const startTask = (id: number) => api.post(`/api/tasks/${id}/start`);
 export const completeTask = (id: number, result: string) => api.post(`/api/tasks/${id}/complete`, { result });
 export const getModelRoles = () => api.get('/api/model-roles');
+
+// Scheduler
+export const getSchedulerStatus = () => api.get('/api/scheduler/status');
+export const getSchedulerQueue = () => api.get('/api/scheduler/queue');

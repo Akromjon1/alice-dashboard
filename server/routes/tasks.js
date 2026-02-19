@@ -46,13 +46,15 @@ router.post('/api/tasks', async (req, res) => {
     assignedTo: assignedTo || '', model, createdAt: now, updatedAt: now,
     completedAt: null, sessionId: null, result: null, rounds: 0,
     source: source || 'dashboard', priority: priority || 'medium',
+    parentTaskId: req.body.parentTaskId || null,
+    pipelineRound: req.body.pipelineRound || 0,
   };
   data.tasks.push(task);
   await writeTasks(data);
   res.json({ ok: true, task });
 });
 
-const ALLOWED_FIELDS = ['status', 'assignedTo', 'result', 'sessionId', 'rounds', 'priority', 'title', 'description', 'model'];
+const ALLOWED_FIELDS = ['status', 'assignedTo', 'result', 'sessionId', 'rounds', 'priority', 'title', 'description', 'model', 'parentTaskId', 'pipelineRound'];
 
 async function updateTask(req, res) {
   const id = parseInt(req.params.id);

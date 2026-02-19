@@ -47,6 +47,16 @@ export interface Task {
   rounds: number;
   source: string;
   priority: 'low' | 'medium' | 'high';
+  parentTaskId: number | null;
+  pipelineRound: number;
+}
+
+export interface SchedulerStatus {
+  running: boolean;
+  lastCheck: string | null;
+  busyAgents: string[];
+  pendingTasks: number;
+  queuedSpawns: { taskId: number; agent: string; model: string; task: string }[];
 }
 
 export interface Activity {

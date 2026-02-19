@@ -41,6 +41,11 @@ app.use(require('./routes/notes'));
 app.use(require('./routes/model-roles'));
 app.use(require('./routes/activity'));
 app.use(require('./routes/chat'));
+app.use(require('./routes/scheduler'));
+
+// ── Start scheduler ──
+const scheduler = require('./scheduler');
+scheduler.start();
 
 // ── Global error handler ──
 app.use((err, req, res, next) => {

@@ -1,5 +1,5 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
-import { getAgents, getActivity, getPipelineStatus, getTasks, createTask, updateTask, patchTask, deleteTaskApi, getModelRoles } from '../api';
+import { getAgents, getActivity, getPipelineStatus, getTasks, createTask, updateTask, patchTask, deleteTaskApi, getModelRoles, getSchedulerStatus } from '../api';
 import { Radio, ListTodo, Plus, Activity, CheckCircle, XCircle, Trash2, Search, Edit3, AlertTriangle, RefreshCw } from 'lucide-react';
 import { timeAgo, getModelTier } from '../utils';
 import { usePolling } from '../hooks/usePolling';
@@ -8,7 +8,8 @@ import PriorityBadge from '../components/PriorityBadge';
 import ConfirmDialog from '../components/ConfirmDialog';
 import LoadingSkeleton from '../components/LoadingSkeleton';
 import KeyboardShortcuts from '../components/KeyboardShortcuts';
-import type { Task, Activity as ActivityType, MissionAgent, RoleInfo, PipelineStatus } from '../types';
+import { Zap } from 'lucide-react';
+import type { Task, Activity as ActivityType, MissionAgent, RoleInfo, PipelineStatus, SchedulerStatus } from '../types';
 
 const COLUMNS: { id: Task['status']; label: string }[] = [
   { id: 'inbox', label: 'INBOX' },
@@ -31,6 +32,7 @@ export default function MissionControl() {
   const [roles, setRoles] = useState<RoleInfo[]>([]);
   const [activities, setActivities] = useState<ActivityType[]>([]);
   const [pipeline, setPipeline] = useState<PipelineStatus>({ active: false, stage: null, task: null, rounds: 0 });
+  const [schedulerStatus, setSchedulerStatus] = useState<SchedulerStatus>({ running: false, lastCheck: null, busyAgents: [], pendingTasks: 0, queuedSpawns: [] });
   const [showAdd, setShowAdd] = useState(false);
   const [stats, setStats] = useState({ agents: 0, tasks: 0, running: 0 });
   const [newTask, setNewTask] = useState<{ title: string; description: string; assignedTo: string; priority: 'high' | 'medium' | 'low' }>({ title: '', description: '', assignedTo: '', priority: 'medium' });
@@ -79,7 +81,13 @@ export default function MissionControl() {
     }).catch(() => {});
   }, []);
 
-  usePolling(() => Promise.all([fetchTasks(), fetchActivity(), fetchPipeline()]).then(() => null), 10000);
+  const fetchScheduler = useCallback(() => {
+    getSchedulerStatus().then((data: SchedulerStatus & { ok?: boolean }) => {
+      setSchedulerStatus({ running: data.running, lastCheck: data.lastCheck, busyAgents: data.busyAgents, pendingTasks: data.pendingTasks, queuedSpawns: data.queuedSpawns });
+    }).catch(() => {});
+  }, []);
+
+  usePolling(() => Promise.all([fetchTasks(), fetchActivity(), fetchPipeline(), fetchScheduler()]).then(() => null), 10000);
 
   useEffect(() => {
     Promise.all([
@@ -101,8 +109,9 @@ export default function MissionControl() {
       fetchTasks(),
       fetchActivity(),
       fetchPipeline(),
+      fetchScheduler(),
     ]).catch(() => {}).finally(() => setLoading(false));
-  }, [fetchTasks, fetchActivity, fetchPipeline]);
+  }, [fetchTasks, fetchActivity, fetchPipeline, fetchScheduler]);
 
   useEffect(() => {
     setStats(prev => ({ ...prev, tasks: tasks.length }));
@@ -291,6 +300,15 @@ export default function MissionControl() {
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '4px 10px', borderRadius: 6, background: schedulerStatus.running ? 'var(--green-bg)' : 'var(--border)', fontSize: 11, fontWeight: 600, fontFamily: 'Fira Code, monospace' }}>
+              <Zap size={12} style={{ color: schedulerStatus.running ? 'var(--green)' : 'var(--text-muted)' }} />
+              <span style={{ width: 6, height: 6, borderRadius: '50%', background: schedulerStatus.running ? 'var(--green)' : 'var(--text-muted)' }} />
+              <span style={{ color: schedulerStatus.running ? 'var(--green)' : 'var(--text-muted)' }}>Auto</span>
+              {schedulerStatus.queuedSpawns.length > 0 && (
+                <span style={{ background: 'var(--accent)', color: 'white', padding: '0 5px', borderRadius: 4, fontSize: 10 }}>{schedulerStatus.queuedSpawns.length}</span>
+              )}
+            </div>
+            <div style={{ width: 1, height: 20, background: 'var(--border)' }} />
             <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
               <span style={{ fontFamily: 'Fira Code, monospace', fontSize: 18, fontWeight: 700 }}>{stats.agents}</span>
               <span style={{ fontSize: 9, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 0.5 }}>Active</span>
