@@ -429,6 +429,16 @@ body {
   .card { padding: 14px; }
   .card-value { font-size: 22px; }
   .login-box { width: 90%; padding: 24px; }
+
+  /* Mission Control responsive */
+  .activity-sidebar { display: none !important; }
+  .mc-header-stats { display: none !important; }
+  .mc-filter-bar { flex-wrap: wrap; }
+  .mc-filter-bar .mc-search { max-width: 100% !important; }
+  .mc-agent-indicators { display: none !important; }
+  .mc-running-banner { display: none !important; }
+  .mc-kanban { padding: 8px 6px !important; }
+  .mc-kanban-col { min-width: 150px !important; }
 }
 
 @media (max-width: 480px) {

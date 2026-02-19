@@ -295,7 +295,7 @@ export default function MissionControl() {
           <span style={{ fontFamily: 'Fira Code, monospace', fontWeight: 700, letterSpacing: 1 }}>MISSION CONTROL</span>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+          <div className="mc-header-stats" style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '4px 10px', borderRadius: 6, background: schedulerStatus.running ? 'var(--green-bg)' : 'var(--border)', fontSize: 11, fontWeight: 600, fontFamily: 'Fira Code, monospace' }}>
               <Zap size={12} style={{ color: schedulerStatus.running ? 'var(--green)' : 'var(--text-muted)' }} />
               <span style={{ width: 6, height: 6, borderRadius: '50%', background: schedulerStatus.running ? 'var(--green)' : 'var(--text-muted)' }} />
@@ -331,11 +331,11 @@ export default function MissionControl() {
       </div>
 
       {/* Search & Filter Bar + Agent Indicators */}
-      <div style={{
+      <div className="mc-filter-bar" style={{
         padding: '10px 16px', borderBottom: '1px solid var(--border)',
         display: 'flex', alignItems: 'center', gap: 12, background: 'var(--bg-card)', flexShrink: 0,
       }}>
-        <div style={{ position: 'relative', flex: 1, maxWidth: 400 }}>
+        <div className="mc-search" style={{ position: 'relative', flex: 1, maxWidth: 400 }}>
           <Search size={14} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
           <input
             value={searchQuery}
@@ -360,6 +360,7 @@ export default function MissionControl() {
         ))}
 
         {/* Agent status indicators */}
+        <div className="mc-agent-indicators" style={{ display: 'contents' }}>
         <div style={{ width: 1, height: 24, background: 'var(--border)', marginLeft: 4 }} />
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
           {agents.filter(a => isAgentWorking(a.name)).map(agent => {
@@ -380,11 +381,12 @@ export default function MissionControl() {
             <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>All agents idle</span>
           )}
         </div>
+        </div>
       </div>
 
       {/* Running Agents Banner */}
       {agents.filter(a => isAgentWorking(a.name)).length > 0 && (
-        <div style={{
+        <div className="mc-running-banner" style={{
           display: 'flex', gap: 10, padding: '10px 16px', background: 'linear-gradient(90deg, var(--green-bg), var(--accent-glow))',
           borderBottom: '1px solid var(--green)', alignItems: 'center', flexWrap: 'wrap',
         }}>
@@ -412,9 +414,9 @@ export default function MissionControl() {
       {/* Kanban + Activity Sidebar */}
       <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
         {/* Kanban Board */}
-        <div style={{ flex: 1, display: 'flex', gap: 1, overflowX: 'auto', padding: '16px 12px', background: 'var(--bg)' }}>
+        <div className="mc-kanban" style={{ flex: 1, display: 'flex', gap: 1, overflowX: 'auto', padding: '16px 12px', background: 'var(--bg)' }}>
           {COLUMNS.map(col => (
-            <div key={col.id} style={{ flex: 1, minWidth: 180, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}
+            <div key={col.id} className="mc-kanban-col" style={{ flex: 1, minWidth: 180, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}
               onDragOver={e => e.preventDefault()} onDrop={() => handleDrop(col.id)}>
               <div style={{
                 padding: '8px 12px', fontSize: 11, fontWeight: 700, color: 'var(--text-muted)',
@@ -510,7 +512,7 @@ export default function MissionControl() {
         </div>
 
         {/* Right Activity Sidebar */}
-        <div style={{
+        <div className="activity-sidebar" style={{
           width: 240, flexShrink: 0, borderLeft: '1px solid var(--border)',
           background: 'var(--bg-card)', display: 'flex', flexDirection: 'column', overflow: 'hidden',
         }}>
