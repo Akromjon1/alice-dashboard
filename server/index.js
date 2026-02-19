@@ -411,6 +411,42 @@ app.delete('/api/matches/team', (req, res) => {
   } catch { res.status(500).json({ error: 'Failed' }); }
 });
 
+// Model management
+app.get('/api/model', (req, res) => {
+  try {
+    const raw = fs.readFileSync('/Users/akrom/.openclaw/openclaw.json', 'utf8');
+    const config = JSON.parse(raw);
+    res.json({ ok: true, model: config.model || 'anthropic/claude-opus-4-6' });
+  } catch {
+    res.json({ ok: true, model: 'anthropic/claude-opus-4-6' });
+  }
+});
+
+app.post('/api/model', (req, res) => {
+  const { model } = req.body;
+  if (!model) return res.status(400).json({ error: 'Missing model' });
+  
+  const allowed = [
+    'anthropic/claude-opus-4-6',
+    'anthropic/claude-sonnet-4-6',
+    'anthropic/claude-haiku-3-5',
+    'ollama/qwen2.5:14b',
+    'ollama/qwen2.5-coder:14b',
+  ];
+  if (!allowed.includes(model)) return res.status(400).json({ error: 'Model not allowed' });
+  
+  try {
+    const configPath = '/Users/akrom/.openclaw/openclaw.json';
+    const raw = fs.readFileSync(configPath, 'utf8');
+    const config = JSON.parse(raw);
+    config.model = model;
+    fs.writeFileSync(configPath, JSON.stringify(config, null, 2));
+    res.json({ ok: true, model });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to update model: ' + err.message });
+  }
+});
+
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`Alice API server running on port ${PORT}`);
   console.log(`Auth token: ${TOKEN}`);

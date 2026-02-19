@@ -45,6 +45,16 @@ function VsCard({ left, right, label, time, date, status, accent, icon, clickLab
   );
 }
 
+function SectionHeader({ icon, title }: { icon: string; title: string }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12, marginTop: 20 }}>
+      <span style={{ fontSize: 18 }}>{icon}</span>
+      <span style={{ fontSize: 16, fontWeight: 700, letterSpacing: 0.5 }}>{title}</span>
+      <div style={{ flex: 1, height: 1, background: 'var(--border)', marginLeft: 8 }} />
+    </div>
+  );
+}
+
 export default function Matches() {
   const [data, setData] = useState<any>({});
   const [ufcEvents, setUfcEvents] = useState<any[]>([]);
@@ -80,27 +90,31 @@ export default function Matches() {
   const getDaysInMonth = (y: number, m: number) => new Date(y, m + 1, 0).getDate();
   const getFirstDay = (y: number, m: number) => new Date(y, m, 1).getDay();
 
-  // Get next match for a team
   const getNextMatch = (teamId: string) => {
     const matches = data.calendar?.[teamId] || [];
     return matches.find((m: any) => m.date >= today) || matches[0];
   };
 
-  // Get main match of the day for a tournament
   const getTournamentHighlight = (tournamentKey: string) => {
     const t = (data.tournaments || {})[tournamentKey];
     if (!t) return null;
-    // Find today's live match, or next upcoming
     const todayMatches = (t.matches || []).filter((m: any) => m.date === today);
     if (todayMatches.length > 0) {
-      // Prefer live, then first upcoming
       return todayMatches.find((m: any) => m.status === 'live') || todayMatches[0];
     }
     return (t.matches || []).find((m: any) => m.date >= today);
   };
 
-  // Get next 2 UFC events
   const nextUfc = ufcEvents.filter(e => e.date >= today).slice(0, 2);
+
+  // Group tournaments by game
+  const tournaments = data.tournaments || {};
+  const tournamentsByGame: Record<string, { key: string; data: any }[]> = {};
+  Object.entries(tournaments).forEach(([key, t]: [string, any]) => {
+    const game = t.game || 'Other';
+    if (!tournamentsByGame[game]) tournamentsByGame[game] = [];
+    tournamentsByGame[game].push({ key, data: t });
+  });
 
   // TOURNAMENT VIEW
   if (view === 'tournament') {
@@ -218,63 +232,134 @@ export default function Matches() {
     );
   }
 
-  // OVERVIEW — compact highlights
-  const tournaments = data.tournaments || {};
-  const tournamentKeys = Object.keys(tournaments);
-
+  // OVERVIEW — sectioned by category
   return (
     <>
       <div className="main-header"><Trophy size={20} /> Matches</div>
       <div className="main-content">
         {loading ? <div className="card-desc">Loading...</div> : (
           <>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 12 }}>
-              {/* Team next matches */}
-              {(data.teams || []).map((team: any) => {
-                const next = getNextMatch(team.id);
-                if (!next) return null;
-                return (
-                  <VsCard key={team.id} left={next.home} right={next.away} label={next.competition} icon={team.icon} time={next.time} date={next.date}
-                    accent={next.date === today ? 'var(--red)' : 'var(--accent)'} status={next.date === today ? 'live' : 'upcoming'}
-                    clickLabel="Calendar →" onClick={() => { setSelectedTeam(team.id); setView('team-calendar'); }} />
-                );
-              })}
+            {/* ⚽ FOOTBALL SECTION */}
+            {(data.teams || []).length > 0 && (
+              <>
+                <SectionHeader icon="⚽" title="Football" />
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 12 }}>
+                  {(data.teams || []).map((team: any) => {
+                    const next = getNextMatch(team.id);
+                    if (!next) return null;
+                    return (
+                      <VsCard key={team.id} left={next.home} right={next.away} label={next.competition} icon={team.icon} time={next.time} date={next.date}
+                        accent={next.date === today ? 'var(--red)' : 'var(--accent)'} status={next.date === today ? 'live' : 'upcoming'}
+                        clickLabel="Calendar →" onClick={() => { setSelectedTeam(team.id); setView('team-calendar'); }} />
+                    );
+                  })}
+                </div>
+              </>
+            )}
 
-              {/* Esports highlights */}
-              {tournamentKeys.map(key => {
-                const t = tournaments[key];
-                const match = getTournamentHighlight(key);
-                if (!match) return null;
-                return (
-                  <VsCard key={key} left={match.team1} right={match.team2} label={t.name} icon={t.icon} time={match.time} date={match.date}
-                    status={match.status} accent={match.status === 'live' ? 'var(--red)' : 'var(--yellow)'}
-                    clickLabel="Matches →" onClick={() => { setSelectedTournament(key); setView('tournament'); }} />
-                );
-              })}
-
-              {/* UFC next 2 */}
-              {nextUfc.map((evt, i) => {
-                const me = evt.mainEvent || {};
-                const hasFighters = me.fighter1 && me.fighter1 !== 'TBA';
-                return hasFighters ? (
-                  <VsCard key={`ufc-${i}`} left={me.fighter1} right={me.fighter2} label={evt.event} icon="🥊" date={evt.date}
-                    accent={evt.event.match(/UFC \d/) ? 'var(--yellow)' : 'var(--accent)'} status="upcoming" />
-                ) : (
-                  <div key={`ufc-${i}`} className="card" style={{ cursor: 'default', marginBottom: 0, borderLeft: '3px solid var(--border)', padding: 14 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                      <div>
-                        <div style={{ fontWeight: 700, fontSize: 13, display: 'flex', alignItems: 'center', gap: 6 }}>🥊 {evt.event}</div>
-                        <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>{evt.location.split(',')[0]} • {evt.date.slice(5)}</div>
+            {/* 🎯 CS2 SECTION */}
+            {tournamentsByGame['CS2'] && tournamentsByGame['CS2'].length > 0 && (
+              <>
+                <SectionHeader icon="🎯" title="CS2" />
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 12 }}>
+                  {tournamentsByGame['CS2'].map(({ key, data: t }) => {
+                    const match = getTournamentHighlight(key);
+                    if (!match) return (
+                      <div key={key} className="card" style={{ cursor: 'pointer', marginBottom: 0, borderLeft: '3px solid var(--yellow)', padding: 14 }} onClick={() => { setSelectedTournament(key); setView('tournament'); }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                          <span style={{ fontSize: 14 }}>{t.icon}</span>
+                          <span style={{ fontWeight: 700, fontSize: 13 }}>{t.name}</span>
+                        </div>
+                        <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 6 }}>{t.stage} • {t.dates}</div>
+                        <div style={{ fontSize: 10, color: 'var(--accent)', marginTop: 6, textAlign: 'right' }}>Matches →</div>
                       </div>
-                      <span className="badge yellow">TBA</span>
-                    </div>
+                    );
+                    return (
+                      <VsCard key={key} left={match.team1} right={match.team2} label={t.name} icon={t.icon} time={match.time} date={match.date}
+                        status={match.status} accent={match.status === 'live' ? 'var(--red)' : 'var(--yellow)'}
+                        clickLabel="Matches →" onClick={() => { setSelectedTournament(key); setView('tournament'); }} />
+                    );
+                  })}
+                </div>
+              </>
+            )}
+
+            {/* ⚔️ DOTA 2 SECTION */}
+            {tournamentsByGame['Dota 2'] && tournamentsByGame['Dota 2'].length > 0 && (
+              <>
+                <SectionHeader icon="⚔️" title="Dota 2" />
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 12 }}>
+                  {tournamentsByGame['Dota 2'].map(({ key, data: t }) => {
+                    const match = getTournamentHighlight(key);
+                    if (!match) return (
+                      <div key={key} className="card" style={{ cursor: 'pointer', marginBottom: 0, borderLeft: '3px solid var(--yellow)', padding: 14 }} onClick={() => { setSelectedTournament(key); setView('tournament'); }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                          <span style={{ fontSize: 14 }}>{t.icon}</span>
+                          <span style={{ fontWeight: 700, fontSize: 13 }}>{t.name}</span>
+                        </div>
+                        <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 6 }}>{t.stage} • {t.dates}</div>
+                        <div style={{ fontSize: 10, color: 'var(--accent)', marginTop: 6, textAlign: 'right' }}>Matches →</div>
+                      </div>
+                    );
+                    return (
+                      <VsCard key={key} left={match.team1} right={match.team2} label={t.name} icon={t.icon} time={match.time} date={match.date}
+                        status={match.status} accent={match.status === 'live' ? 'var(--red)' : 'var(--yellow)'}
+                        clickLabel="Matches →" onClick={() => { setSelectedTournament(key); setView('tournament'); }} />
+                    );
+                  })}
+                </div>
+              </>
+            )}
+
+            {/* 🥊 UFC SECTION */}
+            {nextUfc.length > 0 && (
+              <>
+                <SectionHeader icon="🥊" title="UFC" />
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 12 }}>
+                  {nextUfc.map((evt, i) => {
+                    const me = evt.mainEvent || {};
+                    const hasFighters = me.fighter1 && me.fighter1 !== 'TBA';
+                    return hasFighters ? (
+                      <VsCard key={`ufc-${i}`} left={me.fighter1} right={me.fighter2} label={evt.event} icon="🥊" date={evt.date}
+                        accent={evt.event.match(/UFC \d/) ? 'var(--yellow)' : 'var(--accent)'} status="upcoming" />
+                    ) : (
+                      <div key={`ufc-${i}`} className="card" style={{ cursor: 'default', marginBottom: 0, borderLeft: '3px solid var(--border)', padding: 14 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                          <div>
+                            <div style={{ fontWeight: 700, fontSize: 13, display: 'flex', alignItems: 'center', gap: 6 }}>🥊 {evt.event}</div>
+                            <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>{evt.location?.split(',')[0]} • {evt.date?.slice(5)}</div>
+                          </div>
+                          <span className="badge yellow">TBA</span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </>
+            )}
+
+            {/* Other game sections (dynamic) */}
+            {Object.entries(tournamentsByGame)
+              .filter(([game]) => game !== 'CS2' && game !== 'Dota 2')
+              .map(([game, items]) => (
+                <div key={game}>
+                  <SectionHeader icon="🎮" title={game} />
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 12 }}>
+                    {items.map(({ key, data: t }) => {
+                      const match = getTournamentHighlight(key);
+                      if (!match) return null;
+                      return (
+                        <VsCard key={key} left={match.team1} right={match.team2} label={t.name} icon={t.icon} time={match.time} date={match.date}
+                          status={match.status} accent={match.status === 'live' ? 'var(--red)' : 'var(--yellow)'}
+                          clickLabel="Matches →" onClick={() => { setSelectedTournament(key); setView('tournament'); }} />
+                      );
+                    })}
                   </div>
-                );
-              })}
-            </div>
+                </div>
+              ))}
 
             {/* Add team */}
-            <div style={{ marginTop: 16 }}>
+            <div style={{ marginTop: 20 }}>
               {!showAdd ? (
                 <button onClick={() => setShowAdd(true)} style={{ padding: '8px 16px', background: 'var(--bg-card)', border: '1px dashed var(--border)', borderRadius: 8, color: 'var(--text-muted)', cursor: 'pointer', fontSize: 13, display: 'flex', alignItems: 'center', gap: 6, fontFamily: 'Fira Sans' }}>
                   <Plus size={14} /> Add Team
