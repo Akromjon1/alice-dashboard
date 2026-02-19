@@ -1,16 +1,22 @@
-import { useEffect, useState, useCallback } from 'react';
-import { getAgents, getActivity, getPipelineStatus } from '../api';
-import { Radio, Users, ListTodo, Plus, X, Activity, CheckCircle, XCircle, Loader } from 'lucide-react';
+import { useEffect, useState, useCallback, useRef } from 'react';
+import { getAgents, getActivity, getPipelineStatus, getTasks, createTask, updateTask, deleteTaskApi, getModelRoles } from '../api';
+import { Radio, Users, ListTodo, Plus, Activity, CheckCircle, XCircle, Loader, Trash2 } from 'lucide-react';
 
-interface Task {
-  id: string;
+interface TaskData {
+  id: number;
   title: string;
   description: string;
-  assignee: string;
-  status: 'inbox' | 'assigned' | 'active' | 'review' | 'done';
-  tags: string[];
+  status: 'inbox' | 'assigned' | 'in_progress' | 'review' | 'done' | 'failed';
+  assignedTo: string;
+  model: string;
   createdAt: string;
-  priority?: 'high' | 'medium' | 'low';
+  updatedAt: string;
+  completedAt: string | null;
+  sessionId: string | null;
+  result: string | null;
+  rounds: number;
+  source: string;
+  priority: 'low' | 'medium' | 'high';
 }
 
 interface Agent {
@@ -32,7 +38,13 @@ interface AgentActivity {
   completedAt: string | null;
   runtime: string;
   icon: string;
-  sessionKey?: string;
+}
+
+interface RoleInfo {
+  id: string;
+  name: string;
+  icon: string;
+  model: string;
 }
 
 interface PipelineStatus {
@@ -42,36 +54,57 @@ interface PipelineStatus {
   rounds: number;
 }
 
-const COLUMNS = [
+const COLUMNS: { id: TaskData['status']; label: string }[] = [
   { id: 'inbox', label: 'INBOX' },
   { id: 'assigned', label: 'ASSIGNED' },
-  { id: 'active', label: 'IN PROGRESS' },
+  { id: 'in_progress', label: 'IN PROGRESS' },
   { id: 'review', label: 'REVIEW' },
   { id: 'done', label: 'DONE' },
 ];
 
-const BADGE_COLORS: Record<string, string> = { LEAD: '#F59E0B', INT: '#3B82F6', SPC: '#8B5CF6' };
 const STATUS_COLORS: Record<string, string> = { WORKING: 'var(--green)', IDLE: 'var(--yellow)', OFFLINE: 'var(--text-muted)' };
+const BADGE_COLORS: Record<string, string> = { LEAD: '#F59E0B', INT: '#3B82F6', SPC: '#8B5CF6' };
 const PRIORITY_COLORS: Record<string, string> = { high: 'var(--red)', medium: 'var(--yellow)', low: 'var(--green)' };
 const MODEL_COLORS: Record<string, string> = { opus: '#F59E0B', sonnet: '#3B82F6', haiku: '#10B981', other: '#6B7280' };
 
-const loadTasks = (): Task[] => { try { return JSON.parse(localStorage.getItem('alice-tasks') || '[]'); } catch { return []; } };
-const saveTasks = (tasks: Task[]) => localStorage.setItem('alice-tasks', JSON.stringify(tasks));
+function getModelTier(model: string): string {
+  if (model.includes('opus')) return 'opus';
+  if (model.includes('sonnet')) return 'sonnet';
+  if (model.includes('haiku')) return 'haiku';
+  return 'other';
+}
+
+function timeAgo(dateStr: string): string {
+  const diff = Date.now() - new Date(dateStr).getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return 'just now';
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  return `${Math.floor(hrs / 24)}d ago`;
+}
+
+const SOURCE_ICONS: Record<string, string> = { telegram: '📱', dashboard: '🖥️', pipeline: '⚙️' };
 
 export default function MissionControl() {
   const [agents, setAgents] = useState<Agent[]>([]);
-  const [tasks, setTasks] = useState<Task[]>(loadTasks());
+  const [tasks, setTasks] = useState<TaskData[]>([]);
+  const [roles, setRoles] = useState<RoleInfo[]>([]);
   const [activities, setActivities] = useState<AgentActivity[]>([]);
   const [pipeline, setPipeline] = useState<PipelineStatus>({ active: false, stage: null, task: null, rounds: 0 });
-  const [filter, setFilter] = useState('all');
   const [showAdd, setShowAdd] = useState(false);
   const [stats, setStats] = useState({ agents: 0, tasks: 0, running: 0 });
-  const [newTask, setNewTask] = useState({ title: '', description: '', assignee: '', tags: '', priority: 'medium' as 'high' | 'medium' | 'low' });
-  const [dragTask, setDragTask] = useState<string | null>(null);
+  const [newTask, setNewTask] = useState({ title: '', description: '', assignedTo: '', priority: 'medium' as const });
+  const [dragTask, setDragTask] = useState<number | null>(null);
   const [expandedActivity, setExpandedActivity] = useState<string | null>(null);
-
-  // Track which agents are currently working (from activity feed)
   const [workingAgents, setWorkingAgents] = useState<Set<string>>(new Set());
+  const rolesRef = useRef<RoleInfo[]>([]);
+
+  const fetchTasks = useCallback(() => {
+    getTasks().then(data => {
+      setTasks(data.tasks || []);
+    }).catch(() => {});
+  }, []);
 
   const fetchActivity = useCallback(() => {
     getActivity().then(data => {
@@ -92,62 +125,66 @@ export default function MissionControl() {
   useEffect(() => {
     getAgents().then(data => {
       const mapped: Agent[] = (data.agents || []).map((a: any) => ({
-        id: a.id,
-        name: a.name.replace(' (Main)', ''),
-        icon: a.icon || '🤖',
+        id: a.id, name: a.name.replace(' (Main)', ''), icon: a.icon || '🤖',
         role: a.description?.slice(0, 30) || a.type,
-        badge: a.type === 'main' ? 'LEAD' : a.type === 'watcher' ? 'SPC' : 'INT',
-        status: a.status === 'running' ? 'WORKING' : 'IDLE',
+        badge: (a.type === 'main' ? 'LEAD' : a.type === 'watcher' ? 'SPC' : 'INT') as Agent['badge'],
+        status: (a.status === 'running' ? 'WORKING' : 'IDLE') as Agent['status'],
       }));
       setAgents(mapped);
       setStats(prev => ({ ...prev, agents: mapped.filter(a => a.status === 'WORKING').length }));
     }).catch(() => {});
 
+    getModelRoles().then(data => {
+      const r = (data.roles || []).map((role: any) => ({ id: role.id, name: role.name, icon: role.icon, model: role.model }));
+      setRoles(r);
+      rolesRef.current = r;
+    }).catch(() => {});
+
+    fetchTasks();
     fetchActivity();
     fetchPipeline();
 
-    const interval = setInterval(() => {
-      fetchActivity();
-      fetchPipeline();
-    }, 10000);
+    const interval = setInterval(() => { fetchTasks(); fetchActivity(); fetchPipeline(); }, 5000);
     return () => clearInterval(interval);
-  }, [fetchActivity, fetchPipeline]);
+  }, [fetchTasks, fetchActivity, fetchPipeline]);
 
   useEffect(() => {
     setStats(prev => ({ ...prev, tasks: tasks.length }));
-    saveTasks(tasks);
   }, [tasks]);
 
   const addTask = () => {
     if (!newTask.title) return;
-    const task: Task = {
-      id: Date.now().toString(), title: newTask.title, description: newTask.description,
-      assignee: newTask.assignee || agents[0]?.name || 'Alice', status: 'inbox',
-      tags: newTask.tags.split(',').map(t => t.trim()).filter(Boolean),
-      createdAt: new Date().toISOString(), priority: newTask.priority,
-    };
-    setTasks(prev => [...prev, task]);
-    setNewTask({ title: '', description: '', assignee: '', tags: '', priority: 'medium' });
-    setShowAdd(false);
+    createTask({
+      title: newTask.title,
+      description: newTask.description,
+      assignedTo: newTask.assignedTo || undefined,
+      priority: newTask.priority,
+      source: 'dashboard',
+    }).then(() => {
+      fetchTasks();
+      setNewTask({ title: '', description: '', assignedTo: '', priority: 'medium' });
+      setShowAdd(false);
+    }).catch(() => {});
   };
 
-  const moveTask = (taskId: string, newStatus: Task['status']) => {
-    setTasks(prev => prev.map(t => t.id === taskId ? { ...t, status: newStatus } : t));
+  const moveTask = (taskId: number, newStatus: TaskData['status']) => {
+    updateTask(taskId, { status: newStatus }).then(() => fetchTasks()).catch(() => {});
   };
 
-  const deleteTask = (taskId: string) => {
-    setTasks(prev => prev.filter(t => t.id !== taskId));
+  const removeTask = (taskId: number) => {
+    deleteTaskApi(taskId).then(() => fetchTasks()).catch(() => {});
   };
 
   const columnTasks = (col: string) => tasks.filter(t => t.status === col);
-  const handleDragStart = (taskId: string) => setDragTask(taskId);
-  const handleDrop = (status: Task['status']) => { if (dragTask) { moveTask(dragTask, status); setDragTask(null); } };
+  const handleDragStart = (taskId: number) => setDragTask(taskId);
+  const handleDrop = (status: TaskData['status']) => { if (dragTask) { moveTask(dragTask, status); setDragTask(null); } };
 
-  // Check if agent is currently working
   const isAgentWorking = (name: string) => {
     const lower = name.toLowerCase();
     return workingAgents.has(lower) || workingAgents.has(lower.replace(' (lead)', ''));
   };
+
+  const getRoleInfo = (assignedTo: string): RoleInfo | undefined => rolesRef.current.find(r => r.id === assignedTo);
 
   return (
     <>
@@ -159,28 +196,17 @@ export default function MissionControl() {
           fontFamily: 'Fira Code, monospace', fontSize: 13,
         }}>
           {pipeline.stage === 'complete' ? (
-            <>
-              <span>✅</span>
-              <span style={{ color: 'var(--green)' }}>Pipeline Complete:</span>
-              <span>{pipeline.task}</span>
-              {pipeline.rounds > 0 && <span style={{ color: 'var(--text-muted)', fontSize: 11 }}>({pipeline.rounds} round{pipeline.rounds > 1 ? 's' : ''})</span>}
-            </>
+            <><span>✅</span><span style={{ color: 'var(--green)' }}>Pipeline Complete:</span><span>{pipeline.task}</span>
+            {pipeline.rounds > 0 && <span style={{ color: 'var(--text-muted)', fontSize: 11 }}>({pipeline.rounds} round{pipeline.rounds > 1 ? 's' : ''})</span>}</>
           ) : pipeline.stage === 'failed' ? (
-            <>
-              <span>❌</span>
-              <span style={{ color: 'var(--red)' }}>Pipeline Failed:</span>
-              <span>{pipeline.task}</span>
-              <span style={{ color: 'var(--text-muted)', fontSize: 11 }}>(after {pipeline.rounds} rounds)</span>
-            </>
+            <><span>❌</span><span style={{ color: 'var(--red)' }}>Pipeline Failed:</span><span>{pipeline.task}</span>
+            <span style={{ color: 'var(--text-muted)', fontSize: 11 }}>(after {pipeline.rounds} rounds)</span></>
           ) : (
-            <>
-              <span className="pulse-icon">🔄</span>
-              <span style={{ color: 'var(--accent)' }}>Pipeline Active:</span>
-              {pipeline.stage === 'coding' && <><span>💻 Coder (opus) working...</span><span style={{ color: 'var(--text-muted)' }}>→ 🧪 QA next</span></>}
-              {pipeline.stage === 'qa' && <><span style={{ color: 'var(--text-muted)' }}>💻 Coder done →</span><span>🧪 QA reviewing...</span></>}
-              {pipeline.stage && !['coding', 'qa', 'complete', 'failed'].includes(pipeline.stage) && <span>{pipeline.stage}</span>}
-              {pipeline.rounds > 1 && <span style={{ color: 'var(--yellow)', fontSize: 11 }}>Round {pipeline.rounds}</span>}
-            </>
+            <><span className="pulse-icon">🔄</span><span style={{ color: 'var(--accent)' }}>Pipeline Active:</span>
+            {pipeline.stage === 'coding' && <><span>💻 Coder working...</span><span style={{ color: 'var(--text-muted)' }}>→ 🧪 QA next</span></>}
+            {pipeline.stage === 'qa' && <><span style={{ color: 'var(--text-muted)' }}>💻 done →</span><span>🧪 QA reviewing...</span></>}
+            {pipeline.stage && !['coding', 'qa', 'complete', 'failed'].includes(pipeline.stage) && <span>{pipeline.stage}</span>}
+            {pipeline.rounds > 1 && <span style={{ color: 'var(--yellow)', fontSize: 11 }}>Round {pipeline.rounds}</span>}</>
           )}
         </div>
       )}
@@ -265,35 +291,16 @@ export default function MissionControl() {
           })}
         </div>
 
-        {/* Mission Queue */}
+        {/* Kanban Board */}
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-          {/* Filter tabs */}
-          <div style={{
-            padding: '12px 20px', borderBottom: '1px solid var(--border)',
-            display: 'flex', gap: 6, overflowX: 'auto',
-          }}>
-            {[{ id: 'all', label: 'All', count: tasks.length }, ...COLUMNS.map(c => ({ id: c.id, label: c.label, count: columnTasks(c.id).length }))].map(tab => (
-              <button key={tab.id} onClick={() => setFilter(tab.id)} style={{
-                padding: '5px 12px', borderRadius: 6, border: '1px solid var(--border)',
-                background: filter === tab.id ? 'var(--accent)' : 'transparent',
-                color: filter === tab.id ? 'white' : 'var(--text-muted)',
-                cursor: 'pointer', fontSize: 12, fontFamily: 'Fira Sans, sans-serif',
-                display: 'flex', alignItems: 'center', gap: 4, whiteSpace: 'nowrap',
-              }}>
-                {tab.label} <span style={{ opacity: 0.7 }}>{tab.count}</span>
-              </button>
-            ))}
-          </div>
-
-          {/* Kanban board */}
           <div style={{ flex: 1, display: 'flex', gap: 1, overflowX: 'auto', padding: '16px 12px', background: 'var(--bg)' }}>
             {COLUMNS.map(col => (
               <div key={col.id} style={{ flex: 1, minWidth: 200, display: 'flex', flexDirection: 'column' }}
-                onDragOver={e => e.preventDefault()} onDrop={() => handleDrop(col.id as Task['status'])}>
+                onDragOver={e => e.preventDefault()} onDrop={() => handleDrop(col.id)}>
                 <div style={{
                   padding: '8px 12px', fontSize: 11, fontWeight: 700, color: 'var(--text-muted)',
                   textTransform: 'uppercase', letterSpacing: 1, display: 'flex', alignItems: 'center', gap: 6,
-                  borderBottom: `2px solid ${col.id === 'active' ? 'var(--accent)' : col.id === 'done' ? 'var(--green)' : 'var(--border)'}`,
+                  borderBottom: `2px solid ${col.id === 'in_progress' ? 'var(--accent)' : col.id === 'done' ? 'var(--green)' : 'var(--border)'}`,
                   marginBottom: 8,
                 }}>
                   <ListTodo size={12} /> {col.label}
@@ -302,43 +309,75 @@ export default function MissionControl() {
                   </span>
                 </div>
                 <div style={{ flex: 1, overflowY: 'auto', padding: '0 4px' }}>
-                  {(filter === 'all' ? columnTasks(col.id) : tasks.filter(t => t.status === col.id)).map(task => (
-                    <div key={task.id} draggable onDragStart={() => handleDragStart(task.id)} style={{
-                      background: 'var(--bg-card)', border: '1px solid var(--border)',
-                      borderRadius: 8, padding: 12, marginBottom: 8, cursor: 'grab',
-                      borderLeft: `3px solid ${PRIORITY_COLORS[task.priority || 'medium']}`,
-                      transition: 'box-shadow 0.15s',
-                    }}
-                      onMouseEnter={e => (e.currentTarget.style.boxShadow = 'var(--shadow-lg)')}
-                      onMouseLeave={e => (e.currentTarget.style.boxShadow = 'none')}
-                    >
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                        <div style={{ fontSize: 13, fontWeight: 600, lineHeight: 1.4, flex: 1 }}>{task.title}</div>
-                        <button onClick={() => deleteTask(task.id)} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: 2, flexShrink: 0 }}><X size={12} /></button>
-                      </div>
-                      {task.description && <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 6, lineHeight: 1.4 }}>{task.description.slice(0, 80)}{task.description.length > 80 ? '...' : ''}</div>}
-                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginTop: 8 }}>
-                        {task.tags.map((tag, i) => (
-                          <span key={i} style={{ fontSize: 10, padding: '2px 6px', borderRadius: 4, background: 'var(--accent-glow)', color: 'var(--accent)', fontWeight: 500 }}>{tag}</span>
-                        ))}
-                      </div>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 8 }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, color: 'var(--text-muted)' }}>
-                          <div style={{ width: 18, height: 18, borderRadius: '50%', background: 'var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 9, fontWeight: 600 }}>{task.assignee[0]}</div>
-                          {task.assignee}
+                  {columnTasks(col.id).map(task => {
+                    const role = getRoleInfo(task.assignedTo);
+                    const tier = getModelTier(task.model);
+                    const isInProgress = task.status === 'in_progress';
+                    const isFailed = task.status === 'failed';
+                    return (
+                      <div key={task.id} draggable onDragStart={() => handleDragStart(task.id)} style={{
+                        background: 'var(--bg-card)',
+                        border: isFailed ? '1px solid var(--red)' : '1px solid var(--border)',
+                        borderRadius: 8, padding: 12, marginBottom: 8, cursor: 'grab',
+                        borderLeft: `3px solid ${PRIORITY_COLORS[task.priority]}`,
+                        transition: 'box-shadow 0.15s',
+                        animation: isInProgress ? 'taskPulse 2s ease-in-out infinite' : 'none',
+                      }}
+                        onMouseEnter={e => (e.currentTarget.style.boxShadow = 'var(--shadow-lg)')}
+                        onMouseLeave={e => (e.currentTarget.style.boxShadow = 'none')}
+                      >
+                        {/* Title + delete */}
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                          <div style={{ fontSize: 13, fontWeight: 600, lineHeight: 1.4, flex: 1 }}>{task.title}</div>
+                          <button onClick={() => removeTask(task.id)} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: 2, flexShrink: 0 }}><Trash2 size={12} /></button>
                         </div>
-                        <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>{new Date(task.createdAt).toLocaleDateString()}</span>
+
+                        {/* Description */}
+                        {task.description && (
+                          <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4, lineHeight: 1.4 }}>
+                            {task.description.slice(0, 80)}{task.description.length > 80 ? '...' : ''}
+                          </div>
+                        )}
+
+                        {/* Agent + model badge */}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 8 }}>
+                          {role && (
+                            <>
+                              <span style={{ fontSize: 14 }}>{role.icon}</span>
+                              <span style={{ fontSize: 11, fontWeight: 600 }}>{role.name}</span>
+                            </>
+                          )}
+                          {task.model && (
+                            <span style={{
+                              fontSize: 9, padding: '1px 6px', borderRadius: 4, fontWeight: 700, fontFamily: 'Fira Code, monospace',
+                              background: (MODEL_COLORS[tier] || MODEL_COLORS.other) + '22',
+                              color: MODEL_COLORS[tier] || MODEL_COLORS.other,
+                            }}>{tier}</span>
+                          )}
+                        </div>
+
+                        {/* Priority + source + time */}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 8 }}>
+                          <span style={{
+                            fontSize: 9, padding: '1px 6px', borderRadius: 4, fontWeight: 700,
+                            background: PRIORITY_COLORS[task.priority] ? PRIORITY_COLORS[task.priority].replace(')', ', 0.15)').replace('var(', 'color-mix(in srgb, ') : 'var(--border)',
+                            color: PRIORITY_COLORS[task.priority],
+                          }}>{task.priority}</span>
+                          <span style={{ fontSize: 10 }}>{SOURCE_ICONS[task.source] || '📋'}</span>
+                          <span style={{ fontSize: 10, color: 'var(--text-muted)', fontFamily: 'Fira Code, monospace', marginLeft: 'auto' }}>
+                            {timeAgo(task.createdAt)}
+                          </span>
+                        </div>
+
+                        {/* Result summary for done tasks */}
+                        {task.result && (
+                          <div style={{ fontSize: 10, color: 'var(--green)', marginTop: 6, fontStyle: 'italic' }}>
+                            ✓ {task.result.slice(0, 60)}{task.result.length > 60 ? '...' : ''}
+                          </div>
+                        )}
                       </div>
-                      <div style={{ display: 'flex', gap: 4, marginTop: 8 }}>
-                        {COLUMNS.filter(c => c.id !== task.status).map(c => (
-                          <button key={c.id} onClick={() => moveTask(task.id, c.id as Task['status'])} style={{
-                            fontSize: 9, padding: '2px 6px', borderRadius: 4, cursor: 'pointer',
-                            background: 'var(--border)', color: 'var(--text-muted)', border: 'none', fontFamily: 'Fira Sans, sans-serif',
-                          }}>→ {c.label}</button>
-                        ))}
-                      </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
             ))}
@@ -387,7 +426,6 @@ export default function MissionControl() {
                     onMouseEnter={e => { if (!isRunning) e.currentTarget.style.background = 'var(--bg-card-hover)'; }}
                     onMouseLeave={e => { if (!isRunning) e.currentTarget.style.background = 'transparent'; }}
                   >
-                    {/* Top row: icon + name + status */}
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
                       <span style={{ fontSize: 16 }}>{act.icon}</span>
                       <span style={{ fontSize: 12, fontWeight: 600, flex: 1 }}>{act.agent}</span>
@@ -405,8 +443,6 @@ export default function MissionControl() {
                         <XCircle size={14} style={{ color: 'var(--red)' }} />
                       )}
                     </div>
-
-                    {/* Task summary */}
                     <div style={{
                       fontSize: 11, color: 'var(--text-muted)', lineHeight: 1.4,
                       overflow: 'hidden', textOverflow: 'ellipsis',
@@ -414,8 +450,6 @@ export default function MissionControl() {
                     }}>
                       {act.task}
                     </div>
-
-                    {/* Meta row: model + runtime */}
                     <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 6 }}>
                       <span style={{
                         fontSize: 9, padding: '1px 6px', borderRadius: 4, fontWeight: 700, fontFamily: 'Fira Code, monospace',
@@ -435,7 +469,7 @@ export default function MissionControl() {
         </div>
       </div>
 
-      {/* Pulse animation */}
+      {/* Animations */}
       <style>{`
         @keyframes pulse {
           0%, 100% { opacity: 1; }
@@ -444,6 +478,10 @@ export default function MissionControl() {
         @keyframes spin {
           from { transform: rotate(0deg); }
           to { transform: rotate(360deg); }
+        }
+        @keyframes taskPulse {
+          0%, 100% { box-shadow: 0 0 0 0 rgba(99, 102, 241, 0); }
+          50% { box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.15); }
         }
       `}</style>
 
@@ -461,22 +499,22 @@ export default function MissionControl() {
             <label style={{ fontSize: 12, color: 'var(--text-muted)', display: 'block', marginBottom: 4, textTransform: 'uppercase', letterSpacing: 0.5 }}>Title</label>
             <input value={newTask.title} onChange={e => setNewTask({ ...newTask, title: e.target.value })} placeholder="Task title" style={{
               width: '100%', padding: '10px 12px', background: 'var(--bg)', border: '1px solid var(--border)',
-              borderRadius: 8, color: 'var(--text)', fontSize: 14, marginBottom: 14, outline: 'none', fontFamily: 'Fira Sans, sans-serif',
+              borderRadius: 8, color: 'var(--text)', fontSize: 14, marginBottom: 14, outline: 'none', fontFamily: 'Fira Sans, sans-serif', boxSizing: 'border-box',
             }} />
             <label style={{ fontSize: 12, color: 'var(--text-muted)', display: 'block', marginBottom: 4, textTransform: 'uppercase', letterSpacing: 0.5 }}>Description</label>
             <textarea value={newTask.description} onChange={e => setNewTask({ ...newTask, description: e.target.value })} placeholder="What needs to be done?" rows={3} style={{
               width: '100%', padding: '10px 12px', background: 'var(--bg)', border: '1px solid var(--border)',
-              borderRadius: 8, color: 'var(--text)', fontSize: 14, marginBottom: 14, outline: 'none', resize: 'vertical', fontFamily: 'Fira Sans, sans-serif',
+              borderRadius: 8, color: 'var(--text)', fontSize: 14, marginBottom: 14, outline: 'none', resize: 'vertical', fontFamily: 'Fira Sans, sans-serif', boxSizing: 'border-box',
             }} />
             <div style={{ display: 'flex', gap: 12, marginBottom: 14 }}>
               <div style={{ flex: 1 }}>
-                <label style={{ fontSize: 12, color: 'var(--text-muted)', display: 'block', marginBottom: 4, textTransform: 'uppercase', letterSpacing: 0.5 }}>Assignee</label>
-                <select value={newTask.assignee} onChange={e => setNewTask({ ...newTask, assignee: e.target.value })} style={{
+                <label style={{ fontSize: 12, color: 'var(--text-muted)', display: 'block', marginBottom: 4, textTransform: 'uppercase', letterSpacing: 0.5 }}>Assign to Agent</label>
+                <select value={newTask.assignedTo} onChange={e => setNewTask({ ...newTask, assignedTo: e.target.value })} style={{
                   width: '100%', padding: '10px 12px', background: 'var(--bg)', border: '1px solid var(--border)',
                   borderRadius: 8, color: 'var(--text)', fontSize: 14, outline: 'none', fontFamily: 'Fira Sans, sans-serif',
                 }}>
                   <option value="">Select agent</option>
-                  {agents.map(a => <option key={a.id} value={a.name}>{a.name}</option>)}
+                  {roles.map(r => <option key={r.id} value={r.id}>{r.icon} {r.name}</option>)}
                 </select>
               </div>
               <div style={{ flex: 1 }}>
@@ -491,11 +529,6 @@ export default function MissionControl() {
                 </select>
               </div>
             </div>
-            <label style={{ fontSize: 12, color: 'var(--text-muted)', display: 'block', marginBottom: 4, textTransform: 'uppercase', letterSpacing: 0.5 }}>Tags (comma separated)</label>
-            <input value={newTask.tags} onChange={e => setNewTask({ ...newTask, tags: e.target.value })} placeholder="dashboard, feature, urgent" style={{
-              width: '100%', padding: '10px 12px', background: 'var(--bg)', border: '1px solid var(--border)',
-              borderRadius: 8, color: 'var(--text)', fontSize: 14, marginBottom: 20, outline: 'none', fontFamily: 'Fira Sans, sans-serif',
-            }} />
             <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
               <button onClick={() => setShowAdd(false)} style={{
                 padding: '10px 20px', background: 'var(--border)', color: 'var(--text)',

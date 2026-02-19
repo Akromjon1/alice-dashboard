@@ -619,6 +619,131 @@ app.get('/api/activity', (req, res) => {
   }
 });
 
+// ── Tasks CRUD ──
+const TASKS_PATH = path.join(WORKSPACE, 'data/tasks.json');
+
+function readTasks() {
+  try { return JSON.parse(fs.readFileSync(TASKS_PATH, 'utf8')); }
+  catch { return { tasks: [], nextId: 1 }; }
+}
+function writeTasks(data) {
+  const dir = path.dirname(TASKS_PATH);
+  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+  fs.writeFileSync(TASKS_PATH, JSON.stringify(data, null, 2));
+}
+
+app.get('/api/tasks', (req, res) => {
+  const data = readTasks();
+  const sorted = data.tasks.sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
+  res.json({ ok: true, tasks: sorted });
+});
+
+app.post('/api/tasks', (req, res) => {
+  const { title, description, assignedTo, priority, source } = req.body;
+  if (!title) return res.status(400).json({ error: 'Missing title' });
+  const data = readTasks();
+
+  // Auto-assign model from model-roles.json
+  let model = '';
+  try {
+    const roles = JSON.parse(fs.readFileSync(MODEL_ROLES_PATH, 'utf8')).roles || [];
+    const role = roles.find(r => r.id === assignedTo);
+    if (role) model = role.model;
+  } catch {}
+
+  const now = new Date().toISOString();
+  const task = {
+    id: data.nextId++,
+    title,
+    description: description || '',
+    status: 'inbox',
+    assignedTo: assignedTo || '',
+    model,
+    createdAt: now,
+    updatedAt: now,
+    completedAt: null,
+    sessionId: null,
+    result: null,
+    rounds: 0,
+    source: source || 'dashboard',
+    priority: priority || 'medium',
+  };
+  data.tasks.push(task);
+  writeTasks(data);
+  res.json({ ok: true, task });
+});
+
+app.patch('/api/tasks/:id', (req, res) => {
+  const id = parseInt(req.params.id);
+  const data = readTasks();
+  const task = data.tasks.find(t => t.id === id);
+  if (!task) return res.status(404).json({ error: 'Not found' });
+
+  const allowed = ['status', 'assignedTo', 'result', 'sessionId', 'rounds', 'priority', 'title', 'description', 'model'];
+  for (const key of allowed) {
+    if (req.body[key] !== undefined) task[key] = req.body[key];
+  }
+  task.updatedAt = new Date().toISOString();
+  if (task.status === 'done' || task.status === 'failed') {
+    task.completedAt = task.completedAt || new Date().toISOString();
+  }
+  writeTasks(data);
+  res.json({ ok: true, task });
+});
+
+// Also support POST for update (since PATCH may need setup on some clients)
+app.post('/api/tasks/:id', (req, res) => {
+  const id = parseInt(req.params.id);
+  // Delegate to same logic but check it's not a sub-route
+  if (req.params.id === 'undefined') return res.status(400).json({ error: 'Invalid id' });
+  const data = readTasks();
+  const task = data.tasks.find(t => t.id === id);
+  if (!task) return res.status(404).json({ error: 'Not found' });
+
+  const allowed = ['status', 'assignedTo', 'result', 'sessionId', 'rounds', 'priority', 'title', 'description', 'model'];
+  for (const key of allowed) {
+    if (req.body[key] !== undefined) task[key] = req.body[key];
+  }
+  task.updatedAt = new Date().toISOString();
+  if (task.status === 'done' || task.status === 'failed') {
+    task.completedAt = task.completedAt || new Date().toISOString();
+  }
+  writeTasks(data);
+  res.json({ ok: true, task });
+});
+
+app.delete('/api/tasks/:id', (req, res) => {
+  const id = parseInt(req.params.id);
+  const data = readTasks();
+  data.tasks = data.tasks.filter(t => t.id !== id);
+  writeTasks(data);
+  res.json({ ok: true });
+});
+
+app.post('/api/tasks/:id/start', (req, res) => {
+  const id = parseInt(req.params.id);
+  const data = readTasks();
+  const task = data.tasks.find(t => t.id === id);
+  if (!task) return res.status(404).json({ error: 'Not found' });
+  task.status = 'in_progress';
+  task.updatedAt = new Date().toISOString();
+  writeTasks(data);
+  res.json({ ok: true, task });
+});
+
+app.post('/api/tasks/:id/complete', (req, res) => {
+  const id = parseInt(req.params.id);
+  const data = readTasks();
+  const task = data.tasks.find(t => t.id === id);
+  if (!task) return res.status(404).json({ error: 'Not found' });
+  task.status = 'done';
+  task.completedAt = new Date().toISOString();
+  task.updatedAt = new Date().toISOString();
+  task.result = req.body.result || null;
+  writeTasks(data);
+  res.json({ ok: true, task });
+});
+
 // Pipeline status
 app.get('/api/pipeline', (req, res) => {
   const pipelinePath = path.join(WORKSPACE, 'data/pipeline-status.json');

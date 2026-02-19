@@ -74,3 +74,12 @@ export const removeTeam = (name: string) => api.del('/api/matches/team', { name 
 export const getUfc = () => api.get('/api/ufc');
 export const getActivity = () => api.get('/api/activity');
 export const getPipelineStatus = () => api.get('/api/pipeline');
+
+// Tasks
+export const getTasks = () => api.get('/api/tasks');
+export const createTask = (task: any) => api.post('/api/tasks', task);
+export const updateTask = (id: number, data: any) => api.post(`/api/tasks/${id}`, data);
+export const deleteTaskApi = (id: number) => api.del(`/api/tasks/${id}`);
+export const startTask = (id: number) => api.post(`/api/tasks/${id}/start`);
+export const completeTask = (id: number, result: string) => api.post(`/api/tasks/${id}/complete`, { result });
+export const getModelRoles = () => api.get('/api/model-roles');
