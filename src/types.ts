@@ -2,11 +2,15 @@ export interface Agent {
   id: string;
   name: string;
   description: string;
-  status: 'running' | 'stopped' | 'error';
+  status: 'running' | 'stopped' | 'error' | 'ready' | 'standby';
   icon: string;
   lastMessage?: string;
   lastActive?: string;
   sessionKey?: string;
+  type?: string;
+  model?: string;
+  modelTier?: string;
+  isPipeline?: boolean;
 }
 
 export interface Message {
@@ -26,4 +30,64 @@ export interface Skill {
 export interface AppConfig {
   gatewayUrl: string;
   apiToken: string;
+}
+
+export interface Task {
+  id: number;
+  title: string;
+  description: string;
+  status: 'inbox' | 'assigned' | 'in_progress' | 'review' | 'done' | 'failed';
+  assignedTo: string;
+  model: string;
+  createdAt: string;
+  updatedAt: string;
+  completedAt: string | null;
+  sessionId: string | null;
+  result: string | null;
+  rounds: number;
+  source: string;
+  priority: 'low' | 'medium' | 'high';
+}
+
+export interface Activity {
+  id: string;
+  agent: string;
+  task: string;
+  status: 'running' | 'completed' | 'failed';
+  model: string;
+  startedAt: string;
+  completedAt: string | null;
+  runtime: string;
+  icon: string;
+}
+
+export interface ModelRole {
+  id: string;
+  name: string;
+  description: string;
+  model: string;
+  icon: string;
+}
+
+export interface PipelineStatus {
+  active: boolean;
+  stage: string | null;
+  task: string | null;
+  rounds: number;
+}
+
+export interface MissionAgent {
+  id: string;
+  name: string;
+  icon: string;
+  role: string;
+  badge: 'LEAD' | 'INT' | 'SPC';
+  status: 'WORKING' | 'IDLE' | 'OFFLINE';
+}
+
+export interface RoleInfo {
+  id: string;
+  name: string;
+  icon: string;
+  model: string;
 }

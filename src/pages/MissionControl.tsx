@@ -1,60 +1,13 @@
-import { useEffect, useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import { getAgents, getActivity, getPipelineStatus, getTasks, createTask, updateTask, deleteTaskApi, getModelRoles } from '../api';
 import { Radio, Users, ListTodo, Plus, Activity, CheckCircle, XCircle, Loader, Trash2 } from 'lucide-react';
+import { timeAgo, getModelTier } from '../utils';
+import { usePolling } from '../hooks/usePolling';
+import { useToast } from '../contexts/ToastContext';
+import PriorityBadge from '../components/PriorityBadge';
+import type { Task, Activity as ActivityType, MissionAgent, RoleInfo, PipelineStatus } from '../types';
 
-interface TaskData {
-  id: number;
-  title: string;
-  description: string;
-  status: 'inbox' | 'assigned' | 'in_progress' | 'review' | 'done' | 'failed';
-  assignedTo: string;
-  model: string;
-  createdAt: string;
-  updatedAt: string;
-  completedAt: string | null;
-  sessionId: string | null;
-  result: string | null;
-  rounds: number;
-  source: string;
-  priority: 'low' | 'medium' | 'high';
-}
-
-interface Agent {
-  id: string;
-  name: string;
-  icon: string;
-  role: string;
-  badge: 'LEAD' | 'INT' | 'SPC';
-  status: 'WORKING' | 'IDLE' | 'OFFLINE';
-}
-
-interface AgentActivity {
-  id: string;
-  agent: string;
-  task: string;
-  status: 'running' | 'completed' | 'failed';
-  model: string;
-  startedAt: string;
-  completedAt: string | null;
-  runtime: string;
-  icon: string;
-}
-
-interface RoleInfo {
-  id: string;
-  name: string;
-  icon: string;
-  model: string;
-}
-
-interface PipelineStatus {
-  active: boolean;
-  stage: string | null;
-  task: string | null;
-  rounds: number;
-}
-
-const COLUMNS: { id: TaskData['status']; label: string }[] = [
+const COLUMNS: { id: Task['status']; label: string }[] = [
   { id: 'inbox', label: 'INBOX' },
   { id: 'assigned', label: 'ASSIGNED' },
   { id: 'in_progress', label: 'IN PROGRESS' },
@@ -65,77 +18,63 @@ const COLUMNS: { id: TaskData['status']; label: string }[] = [
 const STATUS_COLORS: Record<string, string> = { WORKING: 'var(--green)', IDLE: 'var(--yellow)', OFFLINE: 'var(--text-muted)' };
 const BADGE_COLORS: Record<string, string> = { LEAD: '#F59E0B', INT: '#3B82F6', SPC: '#8B5CF6' };
 const PRIORITY_COLORS: Record<string, string> = { high: 'var(--red)', medium: 'var(--yellow)', low: 'var(--green)' };
-const MODEL_COLORS: Record<string, string> = { opus: '#F59E0B', sonnet: '#3B82F6', haiku: '#10B981', other: '#6B7280' };
-
-function getModelTier(model: string): string {
-  if (model.includes('opus')) return 'opus';
-  if (model.includes('sonnet')) return 'sonnet';
-  if (model.includes('haiku')) return 'haiku';
-  return 'other';
-}
-
-function timeAgo(dateStr: string): string {
-  const diff = Date.now() - new Date(dateStr).getTime();
-  const mins = Math.floor(diff / 60000);
-  if (mins < 1) return 'just now';
-  if (mins < 60) return `${mins}m ago`;
-  const hrs = Math.floor(mins / 60);
-  if (hrs < 24) return `${hrs}h ago`;
-  return `${Math.floor(hrs / 24)}d ago`;
-}
-
+const MODEL_COLORS: Record<string, string> = { opus: '#F59E0B', sonnet: '#3B82F6', haiku: '#10B981', local: '#6B7280' };
 const SOURCE_ICONS: Record<string, string> = { telegram: '📱', dashboard: '🖥️', pipeline: '⚙️' };
 
 export default function MissionControl() {
-  const [agents, setAgents] = useState<Agent[]>([]);
-  const [tasks, setTasks] = useState<TaskData[]>([]);
+  const { showToast } = useToast();
+  const [agents, setAgents] = useState<MissionAgent[]>([]);
+  const [tasks, setTasks] = useState<Task[]>([]);
   const [roles, setRoles] = useState<RoleInfo[]>([]);
-  const [activities, setActivities] = useState<AgentActivity[]>([]);
+  const [activities, setActivities] = useState<ActivityType[]>([]);
   const [pipeline, setPipeline] = useState<PipelineStatus>({ active: false, stage: null, task: null, rounds: 0 });
   const [showAdd, setShowAdd] = useState(false);
   const [stats, setStats] = useState({ agents: 0, tasks: 0, running: 0 });
-  const [newTask, setNewTask] = useState({ title: '', description: '', assignedTo: '', priority: 'medium' as const });
+  const [newTask, setNewTask] = useState<{ title: string; description: string; assignedTo: string; priority: 'high' | 'medium' | 'low' }>({ title: '', description: '', assignedTo: '', priority: 'medium' });
   const [dragTask, setDragTask] = useState<number | null>(null);
   const [expandedActivity, setExpandedActivity] = useState<string | null>(null);
   const [workingAgents, setWorkingAgents] = useState<Set<string>>(new Set());
   const rolesRef = useRef<RoleInfo[]>([]);
 
   const fetchTasks = useCallback(() => {
-    getTasks().then(data => {
+    getTasks().then((data: { tasks?: Task[] }) => {
       setTasks(data.tasks || []);
     }).catch(() => {});
   }, []);
 
   const fetchActivity = useCallback(() => {
-    getActivity().then(data => {
+    getActivity().then((data: { activities?: ActivityType[] }) => {
       const acts = data.activities || [];
       setActivities(acts);
-      const running = acts.filter((a: AgentActivity) => a.status === 'running');
-      setWorkingAgents(new Set(running.map((a: AgentActivity) => a.agent.toLowerCase())));
+      const running = acts.filter((a: ActivityType) => a.status === 'running');
+      setWorkingAgents(new Set(running.map((a: ActivityType) => a.agent.toLowerCase())));
       setStats(prev => ({ ...prev, running: running.length }));
     }).catch(() => {});
   }, []);
 
   const fetchPipeline = useCallback(() => {
-    getPipelineStatus().then(data => {
+    getPipelineStatus().then((data: { active: boolean; stage: string | null; task: string | null; rounds?: number }) => {
       setPipeline({ active: data.active, stage: data.stage, task: data.task, rounds: data.rounds || 0 });
     }).catch(() => {});
   }, []);
 
+  // Use polling at 10s interval
+  usePolling(() => Promise.all([fetchTasks(), fetchActivity(), fetchPipeline()]).then(() => null), 10000);
+
   useEffect(() => {
-    getAgents().then(data => {
-      const mapped: Agent[] = (data.agents || []).map((a: any) => ({
+    getAgents().then((data: { agents?: Array<{ id: string; name: string; icon?: string; description?: string; type?: string; status?: string }> }) => {
+      const mapped: MissionAgent[] = (data.agents || []).map(a => ({
         id: a.id, name: a.name.replace(' (Main)', ''), icon: a.icon || '🤖',
-        role: a.description?.slice(0, 30) || a.type,
-        badge: (a.type === 'main' ? 'LEAD' : a.type === 'watcher' ? 'SPC' : 'INT') as Agent['badge'],
-        status: (a.status === 'running' ? 'WORKING' : 'IDLE') as Agent['status'],
+        role: a.description?.slice(0, 30) || a.type || '',
+        badge: (a.type === 'main' ? 'LEAD' : a.type === 'watcher' ? 'SPC' : 'INT') as MissionAgent['badge'],
+        status: (a.status === 'running' ? 'WORKING' : 'IDLE') as MissionAgent['status'],
       }));
       setAgents(mapped);
       setStats(prev => ({ ...prev, agents: mapped.filter(a => a.status === 'WORKING').length }));
     }).catch(() => {});
 
-    getModelRoles().then(data => {
-      const r = (data.roles || []).map((role: any) => ({ id: role.id, name: role.name, icon: role.icon, model: role.model }));
+    getModelRoles().then((data: { roles?: Array<{ id: string; name: string; icon: string; model: string }> }) => {
+      const r: RoleInfo[] = (data.roles || []).map(role => ({ id: role.id, name: role.name, icon: role.icon, model: role.model }));
       setRoles(r);
       rolesRef.current = r;
     }).catch(() => {});
@@ -143,9 +82,6 @@ export default function MissionControl() {
     fetchTasks();
     fetchActivity();
     fetchPipeline();
-
-    const interval = setInterval(() => { fetchTasks(); fetchActivity(); fetchPipeline(); }, 5000);
-    return () => clearInterval(interval);
   }, [fetchTasks, fetchActivity, fetchPipeline]);
 
   useEffect(() => {
@@ -164,20 +100,21 @@ export default function MissionControl() {
       fetchTasks();
       setNewTask({ title: '', description: '', assignedTo: '', priority: 'medium' });
       setShowAdd(false);
-    }).catch(() => {});
+      showToast('Task created', 'success');
+    }).catch(() => { showToast('Failed to create task', 'error'); });
   };
 
-  const moveTask = (taskId: number, newStatus: TaskData['status']) => {
-    updateTask(taskId, { status: newStatus }).then(() => fetchTasks()).catch(() => {});
+  const moveTask = (taskId: number, newStatus: Task['status']) => {
+    updateTask(taskId, { status: newStatus }).then(() => fetchTasks()).catch(() => { showToast('Failed to update task', 'error'); });
   };
 
   const removeTask = (taskId: number) => {
-    deleteTaskApi(taskId).then(() => fetchTasks()).catch(() => {});
+    deleteTaskApi(taskId).then(() => { fetchTasks(); showToast('Task deleted', 'info'); }).catch(() => { showToast('Failed to delete task', 'error'); });
   };
 
   const columnTasks = (col: string) => tasks.filter(t => t.status === col);
   const handleDragStart = (taskId: number) => setDragTask(taskId);
-  const handleDrop = (status: TaskData['status']) => { if (dragTask) { moveTask(dragTask, status); setDragTask(null); } };
+  const handleDrop = (status: Task['status']) => { if (dragTask) { moveTask(dragTask, status); setDragTask(null); } };
 
   const isAgentWorking = (name: string) => {
     const lower = name.toLowerCase();
@@ -202,7 +139,7 @@ export default function MissionControl() {
             <><span>❌</span><span style={{ color: 'var(--red)' }}>Pipeline Failed:</span><span>{pipeline.task}</span>
             <span style={{ color: 'var(--text-muted)', fontSize: 11 }}>(after {pipeline.rounds} rounds)</span></>
           ) : (
-            <><span className="pulse-icon">🔄</span><span style={{ color: 'var(--accent)' }}>Pipeline Active:</span>
+            <><span className="pulse-animation">🔄</span><span style={{ color: 'var(--accent)' }}>Pipeline Active:</span>
             {pipeline.stage === 'coding' && <><span>💻 Coder working...</span><span style={{ color: 'var(--text-muted)' }}>→ 🧪 QA next</span></>}
             {pipeline.stage === 'qa' && <><span style={{ color: 'var(--text-muted)' }}>💻 done →</span><span>🧪 QA reviewing...</span></>}
             {pipeline.stage && !['coding', 'qa', 'complete', 'failed'].includes(pipeline.stage) && <span>{pipeline.stage}</span>}
@@ -326,20 +263,17 @@ export default function MissionControl() {
                         onMouseEnter={e => (e.currentTarget.style.boxShadow = 'var(--shadow-lg)')}
                         onMouseLeave={e => (e.currentTarget.style.boxShadow = 'none')}
                       >
-                        {/* Title + delete */}
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                           <div style={{ fontSize: 13, fontWeight: 600, lineHeight: 1.4, flex: 1 }}>{task.title}</div>
                           <button onClick={() => removeTask(task.id)} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: 2, flexShrink: 0 }}><Trash2 size={12} /></button>
                         </div>
 
-                        {/* Description */}
                         {task.description && (
                           <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4, lineHeight: 1.4 }}>
                             {task.description.slice(0, 80)}{task.description.length > 80 ? '...' : ''}
                           </div>
                         )}
 
-                        {/* Agent + model badge */}
                         <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 8 }}>
                           {role && (
                             <>
@@ -350,26 +284,20 @@ export default function MissionControl() {
                           {task.model && (
                             <span style={{
                               fontSize: 9, padding: '1px 6px', borderRadius: 4, fontWeight: 700, fontFamily: 'Fira Code, monospace',
-                              background: (MODEL_COLORS[tier] || MODEL_COLORS.other) + '22',
-                              color: MODEL_COLORS[tier] || MODEL_COLORS.other,
+                              background: (MODEL_COLORS[tier] || MODEL_COLORS.local) + '22',
+                              color: MODEL_COLORS[tier] || MODEL_COLORS.local,
                             }}>{tier}</span>
                           )}
                         </div>
 
-                        {/* Priority + source + time */}
                         <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 8 }}>
-                          <span style={{
-                            fontSize: 9, padding: '1px 6px', borderRadius: 4, fontWeight: 700,
-                            background: PRIORITY_COLORS[task.priority] ? PRIORITY_COLORS[task.priority].replace(')', ', 0.15)').replace('var(', 'color-mix(in srgb, ') : 'var(--border)',
-                            color: PRIORITY_COLORS[task.priority],
-                          }}>{task.priority}</span>
+                          <PriorityBadge priority={task.priority} />
                           <span style={{ fontSize: 10 }}>{SOURCE_ICONS[task.source] || '📋'}</span>
                           <span style={{ fontSize: 10, color: 'var(--text-muted)', fontFamily: 'Fira Code, monospace', marginLeft: 'auto' }}>
                             {timeAgo(task.createdAt)}
                           </span>
                         </div>
 
-                        {/* Result summary for done tasks */}
                         {task.result && (
                           <div style={{ fontSize: 10, color: 'var(--green)', marginTop: 6, fontStyle: 'italic' }}>
                             ✓ {task.result.slice(0, 60)}{task.result.length > 60 ? '...' : ''}
@@ -397,10 +325,9 @@ export default function MissionControl() {
             <Activity size={12} style={{ color: 'var(--green)' }} />
             Agent Activity
             {stats.running > 0 && (
-              <span style={{
+              <span className="pulse-animation" style={{
                 marginLeft: 'auto', background: 'var(--green-bg)', color: 'var(--green)',
                 padding: '2px 8px', borderRadius: 10, fontSize: 10, fontWeight: 700,
-                animation: 'pulse 2s ease-in-out infinite',
               }}>{stats.running} live</span>
             )}
           </div>
@@ -431,9 +358,8 @@ export default function MissionControl() {
                       <span style={{ fontSize: 12, fontWeight: 600, flex: 1 }}>{act.agent}</span>
                       {isRunning ? (
                         <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 10, color: 'var(--green)', fontWeight: 600 }}>
-                          <span style={{
-                            width: 6, height: 6, borderRadius: '50%', background: 'var(--green)',
-                            animation: 'pulse 1.5s ease-in-out infinite', display: 'inline-block',
+                          <span className="pulse-animation" style={{
+                            width: 6, height: 6, borderRadius: '50%', background: 'var(--green)', display: 'inline-block',
                           }} />
                           RUNNING
                         </span>
@@ -453,8 +379,8 @@ export default function MissionControl() {
                     <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 6 }}>
                       <span style={{
                         fontSize: 9, padding: '1px 6px', borderRadius: 4, fontWeight: 700, fontFamily: 'Fira Code, monospace',
-                        background: (MODEL_COLORS[act.model] || MODEL_COLORS.other) + '22',
-                        color: MODEL_COLORS[act.model] || MODEL_COLORS.other,
+                        background: (MODEL_COLORS[act.model] || MODEL_COLORS.local) + '22',
+                        color: MODEL_COLORS[act.model] || MODEL_COLORS.local,
                       }}>{act.model}</span>
                       <span style={{ fontSize: 10, color: 'var(--text-muted)', fontFamily: 'Fira Code, monospace' }}>{act.runtime}</span>
                       <span style={{ fontSize: 10, color: 'var(--text-muted)', marginLeft: 'auto' }}>
@@ -519,7 +445,7 @@ export default function MissionControl() {
               </div>
               <div style={{ flex: 1 }}>
                 <label style={{ fontSize: 12, color: 'var(--text-muted)', display: 'block', marginBottom: 4, textTransform: 'uppercase', letterSpacing: 0.5 }}>Priority</label>
-                <select value={newTask.priority} onChange={e => setNewTask({ ...newTask, priority: e.target.value as any })} style={{
+                <select value={newTask.priority} onChange={e => setNewTask({ ...newTask, priority: e.target.value as 'high' | 'medium' | 'low' })} style={{
                   width: '100%', padding: '10px 12px', background: 'var(--bg)', border: '1px solid var(--border)',
                   borderRadius: 8, color: 'var(--text)', fontSize: 14, outline: 'none', fontFamily: 'Fira Sans, sans-serif',
                 }}>

@@ -367,6 +367,43 @@ body {
   border: 1px solid var(--border);
 }
 
+/* Badge tiers */
+.badge-opus { background: var(--accent-glow); color: var(--accent); }
+.badge-sonnet { background: var(--yellow-bg); color: var(--yellow); }
+.badge-haiku { background: var(--green-bg); color: var(--green); }
+.badge-local { background: rgba(128,128,128,0.12); color: var(--text-muted); }
+
+/* Status badges */
+.status-running { color: var(--green); }
+.status-ready { color: var(--green); }
+.status-standby { color: var(--yellow); }
+.status-stopped { color: var(--text-muted); }
+
+/* Priority badges */
+.priority-high { color: var(--red); background: var(--red-bg); }
+.priority-medium { color: var(--yellow); background: var(--yellow-bg); }
+.priority-low { color: var(--green); background: var(--green-bg); }
+
+/* Compact card variant */
+.card-compact { padding: 12px; }
+
+/* Pulse animation for in-progress items */
+.pulse-animation {
+  animation: pulse 2s ease-in-out infinite;
+}
+
+/* Skeleton loading */
+@keyframes skeletonPulse {
+  0%, 100% { opacity: 0.4; }
+  50% { opacity: 0.8; }
+}
+
+/* Toast slide in */
+@keyframes toastSlideIn {
+  from { transform: translateX(100%); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
+}
+
 /* Responsive */
 @media (max-width: 768px) {
   .app { flex-direction: column; }

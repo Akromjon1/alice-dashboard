@@ -1,30 +1,49 @@
-import { useEffect, useState } from 'react';
-import { getStatus, getSkills, getNotes } from '../api';
 import { FileText, Puzzle, Zap, Cpu, HardDrive, MemoryStick, Clock } from 'lucide-react';
+import { getStatus, getSkills, getNotes } from '../api';
+import { usePolling } from '../hooks/usePolling';
+import LoadingSkeleton from '../components/LoadingSkeleton';
+
+interface SystemInfo {
+  ram?: { percent: string; usedGB: string; totalGB: string };
+  cpu?: { usage: string };
+  disk?: { freeGB: string; usedGB: string; totalGB: string };
+  uptime?: string;
+}
+
+interface NoteItem {
+  name: string;
+  date: string;
+  content: string;
+}
+
+interface SkillItem {
+  name: string;
+  description: string;
+}
+
+interface DashboardData {
+  system: SystemInfo | null;
+  skills: SkillItem[];
+  notes: NoteItem[];
+}
 
 export default function Dashboard() {
-  const [skills, setSkills] = useState<any[]>([]);
-  const [notes, setNotes] = useState<any[]>([]);
-  const [system, setSystem] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
-
-  const refresh = () => {
-    Promise.all([
+  const { data, loading } = usePolling<DashboardData>(async () => {
+    const [st, s, n] = await Promise.all([
       getStatus().catch(() => ({})),
       getSkills().catch(() => ({ skills: [] })),
       getNotes().catch(() => ({ notes: [] })),
-    ]).then(([st, s, n]) => {
-      setSystem(st.system || null);
-      setSkills(s.skills || []);
-      setNotes(n.notes || []);
-    }).finally(() => setLoading(false));
-  };
+    ]);
+    return {
+      system: st.system || null,
+      skills: s.skills || [],
+      notes: n.notes || [],
+    };
+  }, 15000);
 
-  useEffect(() => {
-    refresh();
-    const interval = setInterval(refresh, 15000);
-    return () => clearInterval(interval);
-  }, []);
+  const system = data?.system ?? null;
+  const skills = data?.skills ?? [];
+  const notes = data?.notes ?? [];
 
   const ramPercent = system?.ram ? parseFloat(system.ram.percent) : 0;
   const ramColor = ramPercent > 80 ? 'var(--red)' : ramPercent > 60 ? 'var(--yellow)' : 'var(--green)';
@@ -34,7 +53,7 @@ export default function Dashboard() {
       <>
         <div className="main-header">Dashboard</div>
         <div className="main-content">
-          <div className="card-desc">Loading...</div>
+          <LoadingSkeleton count={4} />
         </div>
       </>
     );
@@ -45,7 +64,6 @@ export default function Dashboard() {
       <div className="main-header">Dashboard</div>
       <div className="main-content">
         <div className="grid">
-          {/* Status */}
           <div className="card" style={{ cursor: 'default' }}>
             <div className="card-header">
               <div className="card-title"><Zap size={14} /> Status</div>
@@ -54,7 +72,6 @@ export default function Dashboard() {
             <div className="card-value" style={{ color: 'var(--green)' }}>Online</div>
           </div>
 
-          {/* RAM */}
           {system?.ram && (
             <div className="card" style={{ cursor: 'default' }}>
               <div className="card-header">
@@ -70,7 +87,6 @@ export default function Dashboard() {
             </div>
           )}
 
-          {/* CPU */}
           {system?.cpu && (
             <div className="card" style={{ cursor: 'default' }}>
               <div className="card-header">
@@ -80,7 +96,6 @@ export default function Dashboard() {
             </div>
           )}
 
-          {/* Disk */}
           {system?.disk && (
             <div className="card" style={{ cursor: 'default' }}>
               <div className="card-header">
@@ -91,7 +106,6 @@ export default function Dashboard() {
             </div>
           )}
 
-          {/* Skills */}
           <div className="card" style={{ cursor: 'default' }}>
             <div className="card-header">
               <div className="card-title"><Puzzle size={14} /> Skills</div>
@@ -99,7 +113,6 @@ export default function Dashboard() {
             <div className="card-value">{skills.length}</div>
           </div>
 
-          {/* Notes */}
           <div className="card" style={{ cursor: 'default' }}>
             <div className="card-header">
               <div className="card-title"><FileText size={14} /> Notes</div>
@@ -108,7 +121,6 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* Uptime */}
         {system?.uptime && (
           <div className="uptime-bar">
             <Clock size={12} style={{ display: 'inline', verticalAlign: 'middle', marginRight: 6 }} />
@@ -116,12 +128,11 @@ export default function Dashboard() {
           </div>
         )}
 
-        {/* Recent Notes */}
         <h3 style={{ marginTop: 28, marginBottom: 14, fontSize: 15, fontWeight: 600 }}>Recent Notes</h3>
         {notes.length === 0 ? (
           <div className="card-desc">No notes yet</div>
         ) : (
-          notes.slice(0, 5).map((n: any) => (
+          notes.slice(0, 5).map((n: NoteItem) => (
             <div key={n.name} className="card" style={{ cursor: 'default' }}>
               <div className="card-header">
                 <div className="card-title" style={{ textTransform: 'none', letterSpacing: 0 }}>

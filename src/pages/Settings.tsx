@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
 import { clearConfig, api } from '../api';
 import { Cpu, Loader2, Plus, X, Save, Pencil } from 'lucide-react';
+import { useToast } from '../contexts/ToastContext';
+import type { ModelRole } from '../types';
 
 const AVAILABLE_MODELS = [
   { id: 'anthropic/claude-opus-4-6', alias: 'opus', label: 'Claude Opus 4', tier: 'premium', icon: '🧠' },
@@ -14,15 +16,7 @@ const TIER_COLORS: Record<string, string> = {
   premium: 'var(--accent)', balanced: 'var(--yellow)', economy: 'var(--green)', local: 'var(--text-muted)',
 };
 
-interface AgentRole {
-  id: string;
-  name: string;
-  description: string;
-  model: string;
-  icon: string;
-}
-
-const DEFAULT_ROLES: AgentRole[] = [
+const DEFAULT_ROLES: ModelRole[] = [
   { id: 'coding', name: 'Coding', description: 'Code generation, debugging, reviews', model: 'anthropic/claude-opus-4-6', icon: '💻' },
   { id: 'alice-main', name: 'Alice (Lead)', description: 'Main assistant, planning, coordination', model: 'anthropic/claude-sonnet-4-6', icon: '🤖' },
   { id: 'research', name: 'Research', description: 'Web search, data gathering, analysis', model: 'anthropic/claude-haiku-3-5', icon: '🔍' },
@@ -50,8 +44,9 @@ function ModelSelect({ value, onChange }: { value: string; onChange: (v: string)
 }
 
 export default function Settings({ onLogout }: { onLogout: () => void }) {
+  const { showToast } = useToast();
   const [confirming, setConfirming] = useState(false);
-  const [roles, setRoles] = useState<AgentRole[]>([]);
+  const [roles, setRoles] = useState<ModelRole[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saveMsg, setSaveMsg] = useState<{ ok: boolean; text: string } | null>(null);
@@ -60,7 +55,7 @@ export default function Settings({ onLogout }: { onLogout: () => void }) {
   const [newRole, setNewRole] = useState({ name: '', description: '', model: 'anthropic/claude-haiku-3-5', icon: '🤖' });
 
   useEffect(() => {
-    api.get('/api/model-roles').then(res => {
+    api.get('/api/model-roles').then((res: { roles?: ModelRole[] }) => {
       setRoles(res.roles?.length ? res.roles : DEFAULT_ROLES);
     }).catch(() => {
       setRoles(DEFAULT_ROLES);
@@ -71,13 +66,16 @@ export default function Settings({ onLogout }: { onLogout: () => void }) {
     setSaving(true);
     setSaveMsg(null);
     try {
-      const res = await api.post('/api/model-roles', { roles });
+      const res = await api.post('/api/model-roles', { roles: roles as unknown as Record<string, unknown>[] } as unknown as Record<string, unknown>);
       if (res.ok) {
         setSaveMsg({ ok: true, text: 'Model assignments saved!' });
+        showToast('Model assignments saved!', 'success');
         setTimeout(() => setSaveMsg(null), 3000);
       }
-    } catch (err: any) {
-      setSaveMsg({ ok: false, text: err.message });
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Save failed';
+      setSaveMsg({ ok: false, text: msg });
+      showToast(msg, 'error');
     } finally {
       setSaving(false);
     }
@@ -87,7 +85,7 @@ export default function Settings({ onLogout }: { onLogout: () => void }) {
     setRoles(prev => prev.map(r => r.id === roleId ? { ...r, model } : r));
   };
 
-  const updateRoleField = (roleId: string, field: keyof AgentRole, value: string) => {
+  const updateRoleField = (roleId: string, field: keyof ModelRole, value: string) => {
     setRoles(prev => prev.map(r => r.id === roleId ? { ...r, [field]: value } : r));
   };
 

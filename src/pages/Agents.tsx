@@ -1,8 +1,11 @@
 import { useEffect, useState } from 'react';
 import { getAgents, sendChat } from '../api';
 import { Bot, Send, Activity, Eye, Pause, Play, MessageSquare, ArrowRight, Zap, Shield } from 'lucide-react';
+import { tierColor, tierBgColor } from '../utils';
+import ModelBadge from '../components/ModelBadge';
+import StatusBadge from '../components/StatusBadge';
 
-interface Agent {
+interface AgentData {
   id: string;
   name: string;
   type: string;
@@ -15,24 +18,6 @@ interface Agent {
   isPipeline?: boolean;
 }
 
-function tierColor(tier: string): string {
-  switch (tier) {
-    case 'opus': return 'var(--accent)';
-    case 'sonnet': return 'var(--yellow)';
-    case 'haiku': return 'var(--green)';
-    default: return 'var(--text-muted)';
-  }
-}
-
-function tierBgColor(tier: string): string {
-  switch (tier) {
-    case 'opus': return 'var(--accent-bg, rgba(139,92,246,0.12))';
-    case 'sonnet': return 'var(--yellow-bg, rgba(234,179,8,0.12))';
-    case 'haiku': return 'var(--green-bg, rgba(34,197,94,0.12))';
-    default: return 'rgba(128,128,128,0.12)';
-  }
-}
-
 const pipelineSteps = [
   { id: 'alice-main', label: 'Alice', subtitle: 'Lead', icon: '🤖', tier: 'sonnet' },
   { id: 'coding', label: 'Coder', subtitle: 'Code Gen', icon: '💻', tier: 'opus' },
@@ -40,7 +25,7 @@ const pipelineSteps = [
 ];
 
 export default function Agents() {
-  const [agents, setAgents] = useState<Agent[]>([]);
+  const [agents, setAgents] = useState<AgentData[]>([]);
   const [loading, setLoading] = useState(true);
   const [chatOpen, setChatOpen] = useState(false);
   const [input, setInput] = useState('');
@@ -49,7 +34,7 @@ export default function Agents() {
 
   useEffect(() => {
     getAgents()
-      .then(data => setAgents(data.agents || []))
+      .then((data: { agents?: AgentData[] }) => setAgents(data.agents || []))
       .catch(() => {})
       .finally(() => setLoading(false));
   }, []);
@@ -76,24 +61,6 @@ export default function Agents() {
     return <Activity size={14} style={{ color: 'var(--yellow)' }} />;
   };
 
-  const getStatusLabel = (status: string) => {
-    const colors: Record<string, string> = {
-      running: 'var(--green)',
-      ready: 'var(--green)',
-      standby: 'var(--yellow)',
-      stopped: 'var(--text-muted)',
-    };
-    return (
-      <span style={{
-        fontSize: 11, fontWeight: 500, color: colors[status] || 'var(--text-muted)',
-        textTransform: 'uppercase', letterSpacing: '0.5px',
-      }}>
-        {status}
-      </span>
-    );
-  };
-
-  // Separate pipeline agents from utility agents
   const pipelineIds = new Set(['alice-main', 'coding', 'tester']);
   const pipelineAgents = agents.filter(a => pipelineIds.has(a.id));
 
@@ -147,18 +114,10 @@ export default function Agents() {
                           <span style={{ fontSize: 28, marginBottom: 6 }}>{step.icon}</span>
                           <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--text)' }}>{step.label}</span>
                           <span style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 6 }}>{step.subtitle}</span>
-                          <span style={{
-                            fontSize: 10, fontWeight: 600, fontFamily: 'Fira Code, monospace',
-                            padding: '2px 8px', borderRadius: 4,
-                            background: tierBgColor(step.tier),
-                            color: tierColor(step.tier),
-                            border: `1px solid ${tierColor(step.tier)}44`,
-                          }}>
-                            {step.tier}
-                          </span>
+                          <ModelBadge model={step.tier} />
                           {agent && (
                             <div style={{ marginTop: 6 }}>
-                              {getStatusLabel(agent.status)}
+                              <StatusBadge status={agent.status} />
                             </div>
                           )}
                         </div>
@@ -188,7 +147,6 @@ export default function Agents() {
             </div>
             <div className="grid">
               {agents.map((agent) => {
-                const tier = agent.modelTier || 'local';
                 return (
                   <div key={agent.id} className="card" style={{ cursor: 'default' }}>
                     <div className="card-header">
@@ -198,17 +156,7 @@ export default function Agents() {
                         <span style={{ color: 'var(--text)', fontWeight: 600, fontSize: 15 }}>{agent.name}</span>
                       </div>
                       <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-                        {agent.modelTier && (
-                          <span style={{
-                            fontSize: 10, fontWeight: 600, fontFamily: 'Fira Code, monospace',
-                            padding: '2px 8px', borderRadius: 4,
-                            background: tierBgColor(tier),
-                            color: tierColor(tier),
-                            border: `1px solid ${tierColor(tier)}44`,
-                          }}>
-                            {tier}
-                          </span>
-                        )}
+                        {agent.modelTier && <ModelBadge model={agent.modelTier} />}
                         <span className={`badge ${agent.type === 'main' ? 'green' : agent.type === 'pipeline' ? 'green' : agent.type === 'watcher' ? 'yellow' : 'green'}`}>
                           {agent.type}
                         </span>
@@ -220,7 +168,7 @@ export default function Agents() {
                         <Eye size={12} />
                         {agent.lastActive === 'continuous' ? 'Always active' : `Last: ${agent.lastActive}`}
                       </div>
-                      {getStatusLabel(agent.status)}
+                      <StatusBadge status={agent.status} />
                     </div>
                   </div>
                 );

@@ -37,7 +37,7 @@ export const api = {
     if (!res.ok) throw new Error(`${res.status}`);
     return res.json();
   },
-  post: async (endpoint: string, body?: any) => {
+  post: async (endpoint: string, body?: Record<string, unknown>) => {
     const res = await fetch(`${baseUrl()}${endpoint}`, {
       method: 'POST',
       headers: headers(),
@@ -46,7 +46,7 @@ export const api = {
     if (!res.ok) throw new Error(`${res.status}`);
     return res.json();
   },
-  del: async (endpoint: string, body?: any) => {
+  del: async (endpoint: string, body?: Record<string, unknown>) => {
     const res = await fetch(`${baseUrl()}${endpoint}`, {
       method: 'DELETE',
       headers: headers(),
@@ -77,8 +77,8 @@ export const getPipelineStatus = () => api.get('/api/pipeline');
 
 // Tasks
 export const getTasks = () => api.get('/api/tasks');
-export const createTask = (task: any) => api.post('/api/tasks', task);
-export const updateTask = (id: number, data: any) => api.post(`/api/tasks/${id}`, data);
+export const createTask = (task: Record<string, unknown>) => api.post('/api/tasks', task);
+export const updateTask = (id: number, data: Record<string, unknown>) => api.post(`/api/tasks/${id}`, data);
 export const deleteTaskApi = (id: number) => api.del(`/api/tasks/${id}`);
 export const startTask = (id: number) => api.post(`/api/tasks/${id}/start`);
 export const completeTask = (id: number, result: string) => api.post(`/api/tasks/${id}/complete`, { result });
