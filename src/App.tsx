@@ -1,18 +1,19 @@
 import { useState, useEffect } from 'react';
 import { isConfigured } from './api';
-import { LayoutDashboard, Bot, Puzzle, Settings as SettingsIcon, Sun, Moon, Youtube } from 'lucide-react';
+import { LayoutDashboard, Bot, Puzzle, Settings as SettingsIcon, Sun, Moon, Youtube, Crosshair } from 'lucide-react';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
+import MissionControl from './pages/MissionControl';
 import Agents from './pages/Agents';
 import Skills from './pages/Skills';
 import Settings from './pages/Settings';
 import YouTubePage from './pages/YouTube';
 
-type Page = 'dashboard' | 'agents' | 'youtube' | 'skills' | 'settings';
+type Page = 'mission' | 'dashboard' | 'agents' | 'youtube' | 'skills' | 'settings';
 
 export default function App() {
   const [loggedIn, setLoggedIn] = useState(isConfigured());
-  const [page, setPage] = useState<Page>('dashboard');
+  const [page, setPage] = useState<Page>('mission');
   const [theme, setTheme] = useState<'dark' | 'light'>(() => {
     return (localStorage.getItem('alice-theme') as 'dark' | 'light') || 'dark';
   });
@@ -27,7 +28,8 @@ export default function App() {
   }
 
   const nav = [
-    { id: 'dashboard' as Page, label: 'Dashboard', icon: LayoutDashboard },
+    { id: 'mission' as Page, label: 'Mission Control', icon: Crosshair },
+    { id: 'dashboard' as Page, label: 'System', icon: LayoutDashboard },
     { id: 'agents' as Page, label: 'Agents', icon: Bot },
     { id: 'youtube' as Page, label: 'YouTube', icon: Youtube },
     { id: 'skills' as Page, label: 'Skills', icon: Puzzle },
@@ -36,6 +38,7 @@ export default function App() {
 
   const renderPage = () => {
     switch (page) {
+      case 'mission': return <MissionControl />;
       case 'dashboard': return <Dashboard />;
       case 'agents': return <Agents />;
       case 'youtube': return <YouTubePage />;
