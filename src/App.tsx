@@ -1,0 +1,59 @@
+import { useState } from 'react';
+import { isConfigured } from './api';
+import { LayoutDashboard, Bot, Puzzle, Settings as SettingsIcon, LogOut } from 'lucide-react';
+import Login from './pages/Login';
+import Dashboard from './pages/Dashboard';
+import Agents from './pages/Agents';
+import Skills from './pages/Skills';
+import Settings from './pages/Settings';
+
+type Page = 'dashboard' | 'agents' | 'skills' | 'settings';
+
+export default function App() {
+  const [loggedIn, setLoggedIn] = useState(isConfigured());
+  const [page, setPage] = useState<Page>('dashboard');
+
+  if (!loggedIn) {
+    return <Login onLogin={() => setLoggedIn(true)} />;
+  }
+
+  const nav = [
+    { id: 'dashboard' as Page, label: 'Dashboard', icon: LayoutDashboard },
+    { id: 'agents' as Page, label: 'Agents', icon: Bot },
+    { id: 'skills' as Page, label: 'Skills', icon: Puzzle },
+    { id: 'settings' as Page, label: 'Settings', icon: SettingsIcon },
+  ];
+
+  const renderPage = () => {
+    switch (page) {
+      case 'dashboard': return <Dashboard />;
+      case 'agents': return <Agents />;
+      case 'skills': return <Skills />;
+      case 'settings': return <Settings onLogout={() => setLoggedIn(false)} />;
+    }
+  };
+
+  return (
+    <div className="app">
+      <div className="sidebar">
+        <div className="sidebar-header">
+          <h1>🤖 Alice</h1>
+          <div className="status online">● Connected</div>
+        </div>
+        {nav.map(item => (
+          <div
+            key={item.id}
+            className={`nav-item ${page === item.id ? 'active' : ''}`}
+            onClick={() => setPage(item.id)}
+          >
+            <item.icon size={18} />
+            {item.label}
+          </div>
+        ))}
+      </div>
+      <div className="main">
+        {renderPage()}
+      </div>
+    </div>
+  );
+}
