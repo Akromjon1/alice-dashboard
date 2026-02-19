@@ -247,75 +247,106 @@ app.post('/api/youtube/video', (req, res) => {
 
 // Agents / Sessions management
 app.get('/api/agents', (req, res) => {
-  // Read cron jobs as "agents"
-  const cronPath = path.join(WORKSPACE, 'data');
   const agents = [];
   
-  // Scan for any agent-like configs
+  // Helper: get model tier from full model string
+  function getModelTier(model) {
+    if (!model) return null;
+    if (model.includes('opus')) return 'opus';
+    if (model.includes('sonnet')) return 'sonnet';
+    if (model.includes('haiku')) return 'haiku';
+    return 'local';
+  }
+
+  // Read model-roles.json for role-based agents
+  let roles = [];
+  try {
+    const rolesData = JSON.parse(fs.readFileSync(path.join(WORKSPACE, 'data/model-roles.json'), 'utf8'));
+    roles = rolesData.roles || [];
+  } catch {}
+
+  // Map role IDs to existing agent types/statuses
+  const roleTypeMap = {
+    'coding': 'pipeline',
+    'alice-main': 'main',
+    'tester': 'pipeline',
+    'research': 'utility',
+    'matches': 'watcher',
+    'youtube': 'watcher',
+    'cron': 'system',
+  };
+
+  const pipelineIds = new Set(['coding', 'tester']);
+  const today = new Date().toISOString().split('T')[0];
+
+  // Get last active date from memory files
+  let lastActiveDate = 'unknown';
   try {
     const memDir = path.join(WORKSPACE, 'memory');
     const files = fs.readdirSync(memDir).filter(f => f.endsWith('.md'));
-    const today = new Date().toISOString().split('T')[0];
     const todayFile = files.find(f => f.includes(today));
-    
-    agents.push({
-      id: 'alice-main',
-      name: 'Alice (Main)',
-      type: 'main',
-      status: 'running',
-      description: 'Primary assistant — manages everything',
-      lastActive: todayFile ? today : files[files.length - 1]?.replace('.md', '') || 'unknown',
-    });
-  } catch {}
-  
-  // Check tube.json for youtube watcher
-  try {
-    const tube = JSON.parse(fs.readFileSync(path.join(WORKSPACE, 'data/tube.json'), 'utf8'));
-    agents.push({
-      id: 'youtube-watcher',
-      name: 'YouTube Watcher',
-      type: 'watcher',
-      status: tube.channels?.length > 0 ? 'running' : 'stopped',
-      description: `Tracking ${tube.channels?.length || 0} channels, ${tube.videos?.length || 0} videos`,
-      lastActive: tube.channels?.[tube.channels.length - 1]?.addedAt || 'unknown',
-    });
+    lastActiveDate = todayFile ? today : files[files.length - 1]?.replace('.md', '') || 'unknown';
   } catch {}
 
-  // Check matches
-  try {
-    const matches = JSON.parse(fs.readFileSync(path.join(WORKSPACE, 'data/matches.json'), 'utf8'));
+  // Build agents from roles
+  for (const role of roles) {
+    const tier = getModelTier(role.model);
+    const agentType = roleTypeMap[role.id] || 'utility';
+    let status = 'running';
+    let description = role.description;
+    let lastActive = lastActiveDate;
+
+    // Override status/description for specific agents
+    if (pipelineIds.has(role.id)) {
+      status = 'ready';
+      lastActive = 'on-demand';
+    }
+
+    if (role.id === 'youtube') {
+      try {
+        const tube = JSON.parse(fs.readFileSync(path.join(WORKSPACE, 'data/tube.json'), 'utf8'));
+        status = tube.channels?.length > 0 ? 'running' : 'stopped';
+        description = `Tracking ${tube.channels?.length || 0} channels, ${tube.videos?.length || 0} videos`;
+        lastActive = tube.channels?.[tube.channels.length - 1]?.addedAt || 'unknown';
+      } catch { status = 'stopped'; }
+    }
+
+    if (role.id === 'matches') {
+      try {
+        const matches = JSON.parse(fs.readFileSync(path.join(WORKSPACE, 'data/matches.json'), 'utf8'));
+        status = matches.teams?.length > 0 ? 'running' : 'stopped';
+        description = `Tracking ${matches.teams?.length || 0} teams`;
+        lastActive = matches.teams?.[matches.teams.length - 1]?.addedAt || 'unknown';
+      } catch { status = 'stopped'; description = 'No teams tracked yet'; }
+    }
+
+    if (role.id === 'cron') {
+      try {
+        const hb = fs.readFileSync(path.join(WORKSPACE, 'HEARTBEAT.md'), 'utf8');
+        const hasContent = hb.replace(/[#\s\n]/g, '').replace(/keepthisfileempty.*/i, '').trim().length > 0;
+        status = hasContent ? 'running' : 'standby';
+        lastActive = 'continuous';
+      } catch { status = 'standby'; }
+    }
+
+    if (role.id === 'research') {
+      status = 'standby';
+      lastActive = 'on-demand';
+    }
+
     agents.push({
-      id: 'matches-agent',
-      name: 'Matches Agent',
-      type: 'watcher',
-      status: matches.teams?.length > 0 ? 'running' : 'stopped',
-      description: `Tracking ${matches.teams?.length || 0} teams`,
-      lastActive: matches.teams?.[matches.teams.length - 1]?.addedAt || 'unknown',
-    });
-  } catch {
-    agents.push({
-      id: 'matches-agent',
-      name: 'Matches Agent',
-      type: 'watcher',
-      status: 'stopped',
-      description: 'No teams tracked yet',
-      lastActive: 'never',
+      id: role.id,
+      name: role.name,
+      icon: role.icon,
+      type: agentType,
+      status,
+      description,
+      lastActive,
+      model: role.model,
+      modelTier: tier,
+      isPipeline: pipelineIds.has(role.id) || role.id === 'alice-main',
     });
   }
-
-  // Check heartbeat
-  try {
-    const hb = fs.readFileSync(path.join(WORKSPACE, 'HEARTBEAT.md'), 'utf8');
-    const hasContent = hb.replace(/[#\s\n]/g, '').replace(/keepthisfileempty.*/i, '').trim().length > 0;
-    agents.push({
-      id: 'heartbeat',
-      name: 'Heartbeat Monitor',
-      type: 'system',
-      status: hasContent ? 'running' : 'stopped',
-      description: hasContent ? 'Active periodic checks' : 'No tasks configured',
-      lastActive: 'continuous',
-    });
-  } catch {}
 
   res.json({ ok: true, agents });
 });
