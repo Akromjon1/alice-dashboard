@@ -466,6 +466,170 @@ app.post('/api/model-roles', (req, res) => {
   res.json({ ok: true });
 });
 
+// Activity feed — parse OpenClaw sessions for recent agent runs
+app.get('/api/activity', (req, res) => {
+  const sessionsDir = '/Users/akrom/.openclaw/agents/main/sessions';
+  const activities = [];
+
+  // Read model-roles for name/icon mapping
+  let roles = [];
+  try {
+    roles = JSON.parse(fs.readFileSync(path.join(WORKSPACE, 'data/model-roles.json'), 'utf8')).roles || [];
+  } catch {}
+
+  function getModelTier(model) {
+    if (!model) return 'unknown';
+    if (model.includes('opus')) return 'opus';
+    if (model.includes('sonnet')) return 'sonnet';
+    if (model.includes('haiku')) return 'haiku';
+    return 'other';
+  }
+
+  function agentFromModel(tier) {
+    const role = roles.find(r => getModelTier(r.model) === tier);
+    return role ? { name: role.name, icon: role.icon } : { name: 'Agent', icon: '🤖' };
+  }
+
+  function formatRuntime(ms) {
+    if (!ms || ms < 0) return '—';
+    const s = Math.floor(ms / 1000);
+    if (s < 60) return `${s}s`;
+    const m = Math.floor(s / 60);
+    const rem = s % 60;
+    return `${m}m ${rem}s`;
+  }
+
+  try {
+    // Read sessions.json for metadata
+    const sessionsData = JSON.parse(fs.readFileSync(path.join(sessionsDir, 'sessions.json'), 'utf8'));
+
+    for (const [key, meta] of Object.entries(sessionsData)) {
+      // Skip the main session, only show subagents and cron runs
+      if (key === 'agent:main:main') continue;
+
+      const sessionId = meta.sessionId;
+      const jsonlPath = path.join(sessionsDir, `${sessionId}.jsonl`);
+      if (!fs.existsSync(jsonlPath)) continue;
+
+      const stat = fs.statSync(jsonlPath);
+      const lockExists = fs.existsSync(jsonlPath + '.lock');
+
+      // Read first few lines for session info and task
+      let task = meta.label || '';
+      let model = meta.model || '';
+      let startedAt = null;
+      let completedAt = null;
+      let status = 'completed';
+
+      try {
+        const content = fs.readFileSync(jsonlPath, 'utf8');
+        const lines = content.split('\n').filter(Boolean);
+
+        // Parse first line for timestamp
+        if (lines.length > 0) {
+          try {
+            const first = JSON.parse(lines[0]);
+            startedAt = first.timestamp;
+          } catch {}
+        }
+
+        // Check first user message for task description
+        if (!task) {
+          for (const line of lines.slice(0, 10)) {
+            try {
+              const obj = JSON.parse(line);
+              if (obj.type === 'message' && obj.message?.role === 'user') {
+                const text = typeof obj.message.content === 'string'
+                  ? obj.message.content
+                  : obj.message.content?.find(c => c.type === 'text')?.text || '';
+                task = text.slice(0, 120).split('\n')[0];
+                break;
+              }
+            } catch {}
+          }
+        }
+
+        // Check model from jsonl
+        if (!model) {
+          for (const line of lines.slice(0, 5)) {
+            try {
+              const obj = JSON.parse(line);
+              if (obj.type === 'model_change') {
+                model = obj.modelId || '';
+                break;
+              }
+            } catch {}
+          }
+        }
+
+        // Determine status: if lock file exists, it's running
+        if (lockExists) {
+          status = 'running';
+          completedAt = null;
+        } else {
+          completedAt = stat.mtime.toISOString();
+          // Check last lines for errors
+          const lastLines = lines.slice(-5);
+          for (const line of lastLines) {
+            try {
+              const obj = JSON.parse(line);
+              if (obj.type === 'error' || (obj.message?.content && typeof obj.message.content === 'string' && obj.message.content.includes('Error'))) {
+                status = 'failed';
+              }
+            } catch {}
+          }
+        }
+      } catch {}
+
+      const tier = getModelTier(model);
+      const agentInfo = agentFromModel(tier);
+
+      // Use label-based agent detection
+      let agentName = agentInfo.name;
+      let agentIcon = agentInfo.icon;
+      const label = (meta.label || '').toLowerCase();
+      if (label.includes('coder') || label.includes('coding')) { agentName = 'Coding'; agentIcon = '💻'; }
+      else if (label.includes('qa') || label.includes('tester')) { agentName = 'QA Tester'; agentIcon = '🧪'; }
+      else if (label.includes('research')) { agentName = 'Research'; agentIcon = '🔍'; }
+      else if (label.includes('cron') || label.includes('match')) { agentName = 'Cron Jobs'; agentIcon = '⏰'; }
+
+      const startMs = startedAt ? new Date(startedAt).getTime() : stat.birthtimeMs;
+      const endMs = completedAt ? new Date(completedAt).getTime() : Date.now();
+
+      activities.push({
+        id: sessionId,
+        agent: agentName,
+        task: task.slice(0, 120) || 'No description',
+        status,
+        model: tier,
+        startedAt: startedAt || stat.birthtime.toISOString(),
+        completedAt: status === 'running' ? null : completedAt,
+        runtime: formatRuntime(endMs - startMs),
+        icon: agentIcon,
+        sessionKey: key,
+      });
+    }
+
+    // Sort by start time descending
+    activities.sort((a, b) => new Date(b.startedAt).getTime() - new Date(a.startedAt).getTime());
+
+    res.json({ ok: true, activities: activities.slice(0, 20) });
+  } catch (err) {
+    res.json({ ok: true, activities: [], error: err.message });
+  }
+});
+
+// Pipeline status
+app.get('/api/pipeline', (req, res) => {
+  const pipelinePath = path.join(WORKSPACE, 'data/pipeline-status.json');
+  try {
+    const data = JSON.parse(fs.readFileSync(pipelinePath, 'utf8'));
+    res.json({ ok: true, ...data });
+  } catch {
+    res.json({ ok: true, active: false, stage: null, task: null, rounds: 0 });
+  }
+});
+
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`Alice API server running on port ${PORT}`);
   console.log(`Auth token: ${TOKEN}`);
