@@ -18,29 +18,40 @@ export const clearConfig = () => {
 
 export const isConfigured = () => !!getConfig();
 
-export const apiCall = async (endpoint: string, body?: any) => {
+const headers = () => {
   const config = getConfig();
-  if (!config) throw new Error('Not configured');
-  
-  const res = await fetch(`${config.gatewayUrl}/api${endpoint}`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${config.apiToken}`,
-    },
-    body: body ? JSON.stringify(body) : undefined,
-  });
-  
-  if (!res.ok) {
-    throw new Error(`API error: ${res.status}`);
-  }
-  
-  return res.json();
+  return {
+    'Content-Type': 'application/json',
+    'Authorization': `Bearer ${config?.apiToken}`,
+  };
 };
 
-// Gateway API wrappers
-export const getSessionsList = () => apiCall('/sessions/list', { limit: 50, messageLimit: 1 });
-export const getSessionHistory = (sessionKey: string) => apiCall('/sessions/history', { sessionKey, limit: 50 });
-export const sendToSession = (sessionKey: string, message: string) => apiCall('/sessions/send', { sessionKey, message });
-export const getGatewayStatus = () => apiCall('/status');
-export const getSkills = () => apiCall('/skills/list');
+const baseUrl = () => {
+  const config = getConfig();
+  return config?.gatewayUrl || '';
+};
+
+export const api = {
+  get: async (endpoint: string) => {
+    const res = await fetch(`${baseUrl()}${endpoint}`, { headers: headers() });
+    if (!res.ok) throw new Error(`${res.status}`);
+    return res.json();
+  },
+  post: async (endpoint: string, body?: any) => {
+    const res = await fetch(`${baseUrl()}${endpoint}`, {
+      method: 'POST',
+      headers: headers(),
+      body: body ? JSON.stringify(body) : undefined,
+    });
+    if (!res.ok) throw new Error(`${res.status}`);
+    return res.json();
+  },
+};
+
+export const getStatus = () => api.get('/api/status');
+export const getSessions = () => api.get('/api/sessions');
+export const getSkills = () => api.get('/api/skills');
+export const getNotes = () => api.get('/api/notes');
+export const getConfig_ = () => api.get('/api/config');
+export const saveNote = (filename: string, content: string) => api.post('/api/notes', { filename, content });
+export const sendChat = (message: string) => api.post('/api/chat', { message });

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { saveConfig } from '../api';
+import { saveConfig, getStatus } from '../api';
 
 export default function Login({ onLogin }: { onLogin: () => void }) {
   const [url, setUrl] = useState('');
@@ -13,22 +13,17 @@ export default function Login({ onLogin }: { onLogin: () => void }) {
     setError('');
 
     const cleanUrl = url.replace(/\/+$/, '');
-    
+
+    // Save first so getStatus uses it
+    saveConfig({ gatewayUrl: cleanUrl, apiToken: token });
+
     try {
-      const res = await fetch(`${cleanUrl}/api/status`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-        },
-      });
-      
-      if (!res.ok) throw new Error('Invalid credentials');
-      
-      saveConfig({ gatewayUrl: cleanUrl, apiToken: token });
+      await getStatus();
       onLogin();
     } catch {
       setError('Could not connect. Check URL and token.');
+      // Clear bad config
+      localStorage.removeItem('alice-config');
     } finally {
       setLoading(false);
     }
@@ -38,19 +33,19 @@ export default function Login({ onLogin }: { onLogin: () => void }) {
     <div className="login-page">
       <form className="login-box" onSubmit={handleSubmit}>
         <h2>🤖 Alice Dashboard</h2>
-        <p>Connect to your OpenClaw gateway</p>
-        
+        <p>Connect to your Alice API server</p>
+
         {error && <div className="error">{error}</div>}
-        
-        <label>Gateway URL</label>
+
+        <label>Server URL</label>
         <input
           type="url"
-          placeholder="https://your-tunnel.cfargotunnel.com"
+          placeholder="https://your-tunnel.trycloudflare.com"
           value={url}
           onChange={e => setUrl(e.target.value)}
           required
         />
-        
+
         <label>API Token</label>
         <input
           type="password"
@@ -59,7 +54,7 @@ export default function Login({ onLogin }: { onLogin: () => void }) {
           onChange={e => setToken(e.target.value)}
           required
         />
-        
+
         <button type="submit" disabled={loading}>
           {loading ? 'Connecting...' : 'Connect'}
         </button>
