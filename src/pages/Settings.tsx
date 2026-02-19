@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { clearConfig, api } from '../api';
-import { Cpu, Check, Loader2, Plus, X, Save, Pencil } from 'lucide-react';
+import { Cpu, Loader2, Plus, X, Save, Pencil } from 'lucide-react';
 
 const AVAILABLE_MODELS = [
   { id: 'anthropic/claude-opus-4-6', alias: 'opus', label: 'Claude Opus 4', tier: 'premium', icon: '🧠' },

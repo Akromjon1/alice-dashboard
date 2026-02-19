@@ -2,14 +2,6 @@ import { useEffect, useState } from 'react';
 import { getAgents, sendChat } from '../api';
 import { Bot, Send, Activity, Eye, Pause, Play, MessageSquare, ArrowRight, Zap, Shield } from 'lucide-react';
 
-interface Role {
-  id: string;
-  name: string;
-  description: string;
-  model: string;
-  icon: string;
-}
-
 interface Agent {
   id: string;
   name: string;
@@ -21,13 +13,6 @@ interface Agent {
   modelTier?: string;
   icon?: string;
   isPipeline?: boolean;
-}
-
-function getModelTier(model: string): string {
-  if (model.includes('opus')) return 'opus';
-  if (model.includes('sonnet')) return 'sonnet';
-  if (model.includes('haiku')) return 'haiku';
-  return 'local';
 }
 
 function tierColor(tier: string): string {
@@ -111,7 +96,6 @@ export default function Agents() {
   // Separate pipeline agents from utility agents
   const pipelineIds = new Set(['alice-main', 'coding', 'tester']);
   const pipelineAgents = agents.filter(a => pipelineIds.has(a.id));
-  const utilityAgents = agents.filter(a => !pipelineIds.has(a.id));
 
   return (
     <>
