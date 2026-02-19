@@ -411,40 +411,28 @@ app.delete('/api/matches/team', (req, res) => {
   } catch { res.status(500).json({ error: 'Failed' }); }
 });
 
-// Model management
-app.get('/api/model', (req, res) => {
+// Model role assignments
+const MODEL_ROLES_PATH = path.join(WORKSPACE, 'data/model-roles.json');
+
+app.get('/api/model-roles', (req, res) => {
   try {
-    const raw = fs.readFileSync('/Users/akrom/.openclaw/openclaw.json', 'utf8');
-    const config = JSON.parse(raw);
-    res.json({ ok: true, model: config.model || 'anthropic/claude-opus-4-6' });
+    const data = JSON.parse(fs.readFileSync(MODEL_ROLES_PATH, 'utf8'));
+    res.json({ ok: true, roles: data.roles || [] });
   } catch {
-    res.json({ ok: true, model: 'anthropic/claude-opus-4-6' });
+    res.json({ ok: true, roles: [] });
   }
 });
 
-app.post('/api/model', (req, res) => {
-  const { model } = req.body;
-  if (!model) return res.status(400).json({ error: 'Missing model' });
+app.post('/api/model-roles', (req, res) => {
+  const { roles } = req.body;
+  if (!Array.isArray(roles)) return res.status(400).json({ error: 'Missing roles array' });
   
-  const allowed = [
-    'anthropic/claude-opus-4-6',
-    'anthropic/claude-sonnet-4-6',
-    'anthropic/claude-haiku-3-5',
-    'ollama/qwen2.5:14b',
-    'ollama/qwen2.5-coder:14b',
-  ];
-  if (!allowed.includes(model)) return res.status(400).json({ error: 'Model not allowed' });
+  const dataDir = path.dirname(MODEL_ROLES_PATH);
+  if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
   
-  try {
-    const configPath = '/Users/akrom/.openclaw/openclaw.json';
-    const raw = fs.readFileSync(configPath, 'utf8');
-    const config = JSON.parse(raw);
-    config.model = model;
-    fs.writeFileSync(configPath, JSON.stringify(config, null, 2));
-    res.json({ ok: true, model });
-  } catch (err) {
-    res.status(500).json({ error: 'Failed to update model: ' + err.message });
-  }
+  const data = { roles, updatedAt: new Date().toISOString() };
+  fs.writeFileSync(MODEL_ROLES_PATH, JSON.stringify(data, null, 2));
+  res.json({ ok: true });
 });
 
 app.listen(PORT, '0.0.0.0', () => {
