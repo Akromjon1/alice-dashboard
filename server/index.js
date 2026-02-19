@@ -200,6 +200,104 @@ app.post('/api/chat', async (req, res) => {
   }
 });
 
+// YouTube channels & videos
+app.get('/api/youtube', (req, res) => {
+  const tubePath = path.join(WORKSPACE, 'data/tube.json');
+  try {
+    const data = JSON.parse(fs.readFileSync(tubePath, 'utf8'));
+    res.json({ ok: true, ...data });
+  } catch {
+    res.json({ ok: true, channels: [], videos: [] });
+  }
+});
+
+app.post('/api/youtube/channel', (req, res) => {
+  const { name, url } = req.body;
+  if (!name || !url) return res.status(400).json({ error: 'Missing name or url' });
+  const tubePath = path.join(WORKSPACE, 'data/tube.json');
+  let data = { channels: [], videos: [] };
+  try { data = JSON.parse(fs.readFileSync(tubePath, 'utf8')); } catch {}
+  data.channels.push({ name, url, addedAt: new Date().toISOString().split('T')[0] });
+  fs.writeFileSync(tubePath, JSON.stringify(data, null, 2));
+  res.json({ ok: true });
+});
+
+app.delete('/api/youtube/channel', (req, res) => {
+  const { url } = req.body;
+  const tubePath = path.join(WORKSPACE, 'data/tube.json');
+  try {
+    const data = JSON.parse(fs.readFileSync(tubePath, 'utf8'));
+    data.channels = data.channels.filter(c => c.url !== url);
+    fs.writeFileSync(tubePath, JSON.stringify(data, null, 2));
+    res.json({ ok: true });
+  } catch { res.status(500).json({ error: 'Failed' }); }
+});
+
+app.post('/api/youtube/video', (req, res) => {
+  const { title, url } = req.body;
+  if (!title || !url) return res.status(400).json({ error: 'Missing title or url' });
+  const tubePath = path.join(WORKSPACE, 'data/tube.json');
+  let data = { channels: [], videos: [] };
+  try { data = JSON.parse(fs.readFileSync(tubePath, 'utf8')); } catch {}
+  if (!data.videos) data.videos = [];
+  data.videos.push({ title, url, addedAt: new Date().toISOString().split('T')[0] });
+  fs.writeFileSync(tubePath, JSON.stringify(data, null, 2));
+  res.json({ ok: true });
+});
+
+// Agents / Sessions management
+app.get('/api/agents', (req, res) => {
+  // Read cron jobs as "agents"
+  const cronPath = path.join(WORKSPACE, 'data');
+  const agents = [];
+  
+  // Scan for any agent-like configs
+  try {
+    const memDir = path.join(WORKSPACE, 'memory');
+    const files = fs.readdirSync(memDir).filter(f => f.endsWith('.md'));
+    const today = new Date().toISOString().split('T')[0];
+    const todayFile = files.find(f => f.includes(today));
+    
+    agents.push({
+      id: 'alice-main',
+      name: 'Alice (Main)',
+      type: 'main',
+      status: 'running',
+      description: 'Primary assistant — manages everything',
+      lastActive: todayFile ? today : files[files.length - 1]?.replace('.md', '') || 'unknown',
+    });
+  } catch {}
+  
+  // Check tube.json for youtube watcher
+  try {
+    const tube = JSON.parse(fs.readFileSync(path.join(WORKSPACE, 'data/tube.json'), 'utf8'));
+    agents.push({
+      id: 'youtube-watcher',
+      name: 'YouTube Watcher',
+      type: 'watcher',
+      status: tube.channels?.length > 0 ? 'running' : 'stopped',
+      description: `Tracking ${tube.channels?.length || 0} channels, ${tube.videos?.length || 0} videos`,
+      lastActive: tube.channels?.[tube.channels.length - 1]?.addedAt || 'unknown',
+    });
+  } catch {}
+
+  // Check heartbeat
+  try {
+    const hb = fs.readFileSync(path.join(WORKSPACE, 'HEARTBEAT.md'), 'utf8');
+    const hasContent = hb.replace(/[#\s\n]/g, '').replace(/keepthisfileempty.*/i, '').trim().length > 0;
+    agents.push({
+      id: 'heartbeat',
+      name: 'Heartbeat Monitor',
+      type: 'system',
+      status: hasContent ? 'running' : 'stopped',
+      description: hasContent ? 'Active periodic checks' : 'No tasks configured',
+      lastActive: 'continuous',
+    });
+  } catch {}
+
+  res.json({ ok: true, agents });
+});
+
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`Alice API server running on port ${PORT}`);
   console.log(`Auth token: ${TOKEN}`);

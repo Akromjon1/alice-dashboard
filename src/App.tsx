@@ -1,13 +1,14 @@
 import { useState, useEffect } from 'react';
 import { isConfigured } from './api';
-import { LayoutDashboard, Bot, Puzzle, Settings as SettingsIcon, Sun, Moon } from 'lucide-react';
+import { LayoutDashboard, Bot, Puzzle, Settings as SettingsIcon, Sun, Moon, Youtube } from 'lucide-react';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
 import Agents from './pages/Agents';
 import Skills from './pages/Skills';
 import Settings from './pages/Settings';
+import YouTubePage from './pages/YouTube';
 
-type Page = 'dashboard' | 'agents' | 'skills' | 'settings';
+type Page = 'dashboard' | 'agents' | 'youtube' | 'skills' | 'settings';
 
 export default function App() {
   const [loggedIn, setLoggedIn] = useState(isConfigured());
@@ -28,6 +29,7 @@ export default function App() {
   const nav = [
     { id: 'dashboard' as Page, label: 'Dashboard', icon: LayoutDashboard },
     { id: 'agents' as Page, label: 'Agents', icon: Bot },
+    { id: 'youtube' as Page, label: 'YouTube', icon: Youtube },
     { id: 'skills' as Page, label: 'Skills', icon: Puzzle },
     { id: 'settings' as Page, label: 'Settings', icon: SettingsIcon },
   ];
@@ -36,6 +38,7 @@ export default function App() {
     switch (page) {
       case 'dashboard': return <Dashboard />;
       case 'agents': return <Agents />;
+      case 'youtube': return <YouTubePage />;
       case 'skills': return <Skills />;
       case 'settings': return <Settings onLogout={() => setLoggedIn(false)} />;
     }
