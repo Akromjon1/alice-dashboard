@@ -42,8 +42,6 @@ export default function MissionControl() {
   const rolesRef = useRef<RoleInfo[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [activityExpanded, setActivityExpanded] = useState(false);
-
   // Search & Filter
   const [searchQuery, setSearchQuery] = useState('');
   const [filterMode, setFilterMode] = useState<FilterMode>('all');
@@ -265,8 +263,6 @@ export default function MissionControl() {
     );
   }
 
-  const activityBarHeight = activityExpanded ? 240 : 40;
-
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
       {/* Pipeline Banner */}
@@ -413,138 +409,132 @@ export default function MissionControl() {
         </div>
       )}
 
-      {/* Kanban Board - Full Width */}
-      <div style={{ flex: 1, display: 'flex', gap: 1, overflowX: 'auto', padding: '16px 12px', background: 'var(--bg)' }}>
-        {COLUMNS.map(col => (
-          <div key={col.id} style={{ flex: 1, minWidth: 200, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}
-            onDragOver={e => e.preventDefault()} onDrop={() => handleDrop(col.id)}>
-            <div style={{
-              padding: '8px 12px', fontSize: 11, fontWeight: 700, color: 'var(--text-muted)',
-              textTransform: 'uppercase', letterSpacing: 1, display: 'flex', alignItems: 'center', gap: 6,
-              borderBottom: `2px solid ${col.id === 'in_progress' ? 'var(--accent)' : col.id === 'done' ? 'var(--green)' : 'var(--border)'}`,
-              marginBottom: 8, flexShrink: 0,
-            }}>
-              <ListTodo size={12} /> {col.label}
-              <span style={{ marginLeft: 'auto', background: 'var(--border)', padding: '1px 6px', borderRadius: 4, fontSize: 10 }}>
-                {columnTasks(col.id).length}
-              </span>
-            </div>
-            <div style={{ flex: 1, overflowY: 'auto', padding: '0 4px' }}>
-              {columnTasks(col.id).map(task => {
-                const role = getRoleInfo(task.assignedTo);
-                const tier = getModelTier(task.model);
-                const isInProgress = task.status === 'in_progress';
-                const isFailed = task.status === 'failed';
-                return (
-                  <div key={task.id} draggable onDragStart={() => handleDragStart(task.id)}
-                    onClick={() => openEditModal(task)}
-                    style={{
-                      background: 'var(--bg-card)',
-                      border: isFailed ? '1px solid var(--red)' : '1px solid var(--border)',
-                      borderRadius: 8, padding: 12, marginBottom: 8, cursor: 'pointer',
-                      borderLeft: `3px solid ${PRIORITY_COLORS[task.priority]}`,
-                      transition: 'box-shadow 0.15s',
-                      animation: isInProgress ? 'taskPulse 2s ease-in-out infinite' : 'none',
-                    }}
-                    onMouseEnter={e => (e.currentTarget.style.boxShadow = 'var(--shadow-lg)')}
-                    onMouseLeave={e => (e.currentTarget.style.boxShadow = 'none')}
-                  >
-                    {isInProgress && (
-                      <div style={{
-                        display: 'flex', alignItems: 'center', gap: 6, padding: '4px 8px', marginBottom: 8,
-                        background: 'var(--accent-glow)', borderRadius: 6, fontSize: 11, fontWeight: 700,
-                        color: 'var(--accent)',
-                      }}>
-                        <span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: '50%', border: '2px solid var(--accent)', borderTopColor: 'transparent', animation: 'spin 0.8s linear infinite' }} />
-                        Agent working...
-                      </div>
-                    )}
-
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                      <div style={{ fontSize: 13, fontWeight: 600, lineHeight: 1.4, flex: 1 }}>{task.title}</div>
-                      <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
-                        <button onClick={e => { e.stopPropagation(); openEditModal(task); }} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: 2 }}><Edit3 size={12} /></button>
-                        <button onClick={e => { e.stopPropagation(); confirmRemoveTask(task.id); }} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: 2 }}><Trash2 size={12} /></button>
-                      </div>
-                    </div>
-
-                    {task.description && (
-                      <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4, lineHeight: 1.4 }}>
-                        {task.description.slice(0, 80)}{task.description.length > 80 ? '...' : ''}
-                      </div>
-                    )}
-
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 8 }}>
-                      {role && (
-                        <>
-                          <span style={{ fontSize: 14 }}>{role.icon}</span>
-                          <span style={{ fontSize: 11, fontWeight: 600 }}>{role.name}</span>
-                        </>
+      {/* Kanban + Activity Sidebar */}
+      <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
+        {/* Kanban Board */}
+        <div style={{ flex: 1, display: 'flex', gap: 1, overflowX: 'auto', padding: '16px 12px', background: 'var(--bg)' }}>
+          {COLUMNS.map(col => (
+            <div key={col.id} style={{ flex: 1, minWidth: 180, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}
+              onDragOver={e => e.preventDefault()} onDrop={() => handleDrop(col.id)}>
+              <div style={{
+                padding: '8px 12px', fontSize: 11, fontWeight: 700, color: 'var(--text-muted)',
+                textTransform: 'uppercase', letterSpacing: 1, display: 'flex', alignItems: 'center', gap: 6,
+                borderBottom: `2px solid ${col.id === 'in_progress' ? 'var(--accent)' : col.id === 'done' ? 'var(--green)' : 'var(--border)'}`,
+                marginBottom: 8, flexShrink: 0,
+              }}>
+                <ListTodo size={12} /> {col.label}
+                <span style={{ marginLeft: 'auto', background: 'var(--border)', padding: '1px 6px', borderRadius: 4, fontSize: 10 }}>
+                  {columnTasks(col.id).length}
+                </span>
+              </div>
+              <div style={{ flex: 1, overflowY: 'auto', padding: '0 4px' }}>
+                {columnTasks(col.id).map(task => {
+                  const role = getRoleInfo(task.assignedTo);
+                  const tier = getModelTier(task.model);
+                  const isInProgress = task.status === 'in_progress';
+                  const isFailed = task.status === 'failed';
+                  return (
+                    <div key={task.id} draggable onDragStart={() => handleDragStart(task.id)}
+                      onClick={() => openEditModal(task)}
+                      style={{
+                        background: 'var(--bg-card)',
+                        border: isFailed ? '1px solid var(--red)' : '1px solid var(--border)',
+                        borderRadius: 8, padding: 12, marginBottom: 8, cursor: 'pointer',
+                        borderLeft: `3px solid ${PRIORITY_COLORS[task.priority]}`,
+                        transition: 'box-shadow 0.15s',
+                        animation: isInProgress ? 'taskPulse 2s ease-in-out infinite' : 'none',
+                      }}
+                      onMouseEnter={e => (e.currentTarget.style.boxShadow = 'var(--shadow-lg)')}
+                      onMouseLeave={e => (e.currentTarget.style.boxShadow = 'none')}
+                    >
+                      {isInProgress && (
+                        <div style={{
+                          display: 'flex', alignItems: 'center', gap: 6, padding: '4px 8px', marginBottom: 8,
+                          background: 'var(--accent-glow)', borderRadius: 6, fontSize: 11, fontWeight: 700,
+                          color: 'var(--accent)',
+                        }}>
+                          <span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: '50%', border: '2px solid var(--accent)', borderTopColor: 'transparent', animation: 'spin 0.8s linear infinite' }} />
+                          Agent working...
+                        </div>
                       )}
-                      {task.model && (
-                        <span style={{
-                          fontSize: 9, padding: '1px 6px', borderRadius: 4, fontWeight: 700, fontFamily: 'Fira Code, monospace',
-                          background: (MODEL_COLORS[tier] || MODEL_COLORS.local) + '22',
-                          color: MODEL_COLORS[tier] || MODEL_COLORS.local,
-                        }}>{tier}</span>
+
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                        <div style={{ fontSize: 13, fontWeight: 600, lineHeight: 1.4, flex: 1 }}>{task.title}</div>
+                        <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
+                          <button onClick={e => { e.stopPropagation(); openEditModal(task); }} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: 2 }}><Edit3 size={12} /></button>
+                          <button onClick={e => { e.stopPropagation(); confirmRemoveTask(task.id); }} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: 2 }}><Trash2 size={12} /></button>
+                        </div>
+                      </div>
+
+                      {task.description && (
+                        <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4, lineHeight: 1.4 }}>
+                          {task.description.slice(0, 80)}{task.description.length > 80 ? '...' : ''}
+                        </div>
+                      )}
+
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 8 }}>
+                        {role && (
+                          <>
+                            <span style={{ fontSize: 14 }}>{role.icon}</span>
+                            <span style={{ fontSize: 11, fontWeight: 600 }}>{role.name}</span>
+                          </>
+                        )}
+                        {task.model && (
+                          <span style={{
+                            fontSize: 9, padding: '1px 6px', borderRadius: 4, fontWeight: 700, fontFamily: 'Fira Code, monospace',
+                            background: (MODEL_COLORS[tier] || MODEL_COLORS.local) + '22',
+                            color: MODEL_COLORS[tier] || MODEL_COLORS.local,
+                          }}>{tier}</span>
+                        )}
+                      </div>
+
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 8 }}>
+                        <PriorityBadge priority={task.priority} />
+                        <span style={{ fontSize: 10 }}>{SOURCE_ICONS[task.source] || '📋'}</span>
+                        <span style={{ fontSize: 10, color: 'var(--text-muted)', fontFamily: 'Fira Code, monospace', marginLeft: 'auto' }}>
+                          {timeAgo(task.createdAt)}
+                        </span>
+                      </div>
+
+                      {task.result && (
+                        <div style={{ fontSize: 10, color: 'var(--green)', marginTop: 6, fontStyle: 'italic' }}>
+                          ✓ {task.result.slice(0, 60)}{task.result.length > 60 ? '...' : ''}
+                        </div>
                       )}
                     </div>
-
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 8 }}>
-                      <PriorityBadge priority={task.priority} />
-                      <span style={{ fontSize: 10 }}>{SOURCE_ICONS[task.source] || '📋'}</span>
-                      <span style={{ fontSize: 10, color: 'var(--text-muted)', fontFamily: 'Fira Code, monospace', marginLeft: 'auto' }}>
-                        {timeAgo(task.createdAt)}
-                      </span>
-                    </div>
-
-                    {task.result && (
-                      <div style={{ fontSize: 10, color: 'var(--green)', marginTop: 6, fontStyle: 'italic' }}>
-                        ✓ {task.result.slice(0, 60)}{task.result.length > 60 ? '...' : ''}
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
+                  );
+                })}
+              </div>
             </div>
-          </div>
-        ))}
-      </div>
-
-      {/* Collapsible Activity Bottom Panel */}
-      <div style={{
-        flexShrink: 0, borderTop: '1px solid var(--border)', background: 'var(--bg-card)',
-        height: activityBarHeight, transition: 'height 0.2s ease', overflow: 'hidden',
-      }}>
-        {/* Toggle bar */}
-        <div onClick={() => setActivityExpanded(prev => !prev)} style={{
-          height: 40, padding: '0 16px', display: 'flex', alignItems: 'center', gap: 8,
-          cursor: 'pointer', userSelect: 'none', flexShrink: 0,
-        }}>
-          <span style={{ fontSize: 12, color: 'var(--text-muted)', transition: 'transform 0.2s', transform: activityExpanded ? 'rotate(180deg)' : 'rotate(0deg)', display: 'inline-block' }}>▾</span>
-          <Activity size={12} style={{ color: 'var(--green)' }} />
-          <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 1 }}>
-            Activity
-          </span>
-          {stats.running > 0 && (
-            <span className="pulse-animation" style={{
-              background: 'var(--green-bg)', color: 'var(--green)',
-              padding: '2px 8px', borderRadius: 10, fontSize: 10, fontWeight: 700,
-            }}>{stats.running} live</span>
-          )}
-          <span style={{ fontSize: 11, color: 'var(--text-muted)', marginLeft: 'auto' }}>{activities.length} events</span>
+          ))}
         </div>
 
-        {/* Expanded content: horizontal scroll of activity cards */}
-        {activityExpanded && (
+        {/* Right Activity Sidebar */}
+        <div style={{
+          width: 240, flexShrink: 0, borderLeft: '1px solid var(--border)',
+          background: 'var(--bg-card)', display: 'flex', flexDirection: 'column', overflow: 'hidden',
+        }}>
           <div style={{
-            height: 200, overflowX: 'auto', overflowY: 'hidden',
-            padding: '0 16px 16px', display: 'flex', gap: 12, alignItems: 'flex-start',
+            padding: '12px 14px', borderBottom: '1px solid var(--border)',
+            display: 'flex', alignItems: 'center', gap: 8,
           }}>
+            <Activity size={13} style={{ color: 'var(--green)' }} />
+            <span style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1, color: 'var(--text-muted)' }}>Activity</span>
+            {stats.running > 0 && (
+              <span className="pulse-animation" style={{
+                background: 'var(--green-bg)', color: 'var(--green)',
+                padding: '1px 6px', borderRadius: 10, fontSize: 9, fontWeight: 700, marginLeft: 'auto',
+              }}>{stats.running} live</span>
+            )}
+            {stats.running === 0 && (
+              <span style={{ fontSize: 9, color: 'var(--text-muted)', marginLeft: 'auto' }}>{activities.length}</span>
+            )}
+          </div>
+          <div style={{ flex: 1, overflowY: 'auto', padding: '8px 10px' }}>
             {activities.length === 0 ? (
-              <div style={{ fontSize: 12, color: 'var(--text-muted)', padding: '24px 16px', textAlign: 'center', width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                <Radio size={24} style={{ opacity: 0.3, marginBottom: 8 }} />
-                No recent agent activity
+              <div style={{ fontSize: 11, color: 'var(--text-muted)', padding: '20px 8px', textAlign: 'center' }}>
+                <Radio size={18} style={{ opacity: 0.3, marginBottom: 6 }} />
+                <div>No recent activity</div>
               </div>
             ) : (
               activities.map(act => {
@@ -554,45 +544,40 @@ export default function MissionControl() {
                   <div key={act.id}
                     onClick={() => setExpandedActivity(isExpanded ? null : act.id)}
                     style={{
-                      minWidth: 260, maxWidth: 300, padding: '12px 14px', cursor: 'pointer',
-                      borderRadius: 8, border: '1px solid var(--border)', flexShrink: 0,
-                      background: isRunning ? 'var(--green-bg)' : 'var(--bg)',
-                      transition: 'background 0.15s',
+                      padding: '10px 10px', cursor: 'pointer', borderRadius: 8,
+                      border: isRunning ? '1px solid var(--green)' : '1px solid transparent',
+                      background: isRunning ? 'var(--green-bg)' : 'transparent',
+                      marginBottom: 4, transition: 'background 0.15s',
                     }}
-                    onMouseEnter={e => { if (!isRunning) e.currentTarget.style.background = 'var(--bg-card-hover)'; }}
-                    onMouseLeave={e => { if (!isRunning) e.currentTarget.style.background = isRunning ? 'var(--green-bg)' : 'var(--bg)'; }}
+                    onMouseEnter={e => { if (!isRunning) e.currentTarget.style.background = 'var(--bg)'; }}
+                    onMouseLeave={e => { if (!isRunning) e.currentTarget.style.background = isRunning ? 'var(--green-bg)' : 'transparent'; }}
                   >
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
-                      <span style={{ fontSize: 16 }}>{act.icon}</span>
-                      <span style={{ fontSize: 12, fontWeight: 600, flex: 1 }}>{act.agent}</span>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                      <span style={{ fontSize: 13 }}>{act.icon}</span>
+                      <span style={{ fontSize: 11, fontWeight: 600, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{act.agent}</span>
                       {isRunning ? (
-                        <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 10, color: 'var(--green)', fontWeight: 600 }}>
-                          <span className="pulse-animation" style={{
-                            width: 6, height: 6, borderRadius: '50%', background: 'var(--green)', display: 'inline-block',
-                          }} />
-                          RUNNING
-                        </span>
+                        <span className="pulse-animation" style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--green)', flexShrink: 0 }} />
                       ) : act.status === 'completed' ? (
-                        <CheckCircle size={14} style={{ color: 'var(--green)' }} />
+                        <CheckCircle size={11} style={{ color: 'var(--green)', flexShrink: 0 }} />
                       ) : (
-                        <XCircle size={14} style={{ color: 'var(--red)' }} />
+                        <XCircle size={11} style={{ color: 'var(--red)', flexShrink: 0 }} />
                       )}
                     </div>
                     <div style={{
-                      fontSize: 11, color: 'var(--text-muted)', lineHeight: 1.4,
+                      fontSize: 10, color: 'var(--text-muted)', lineHeight: 1.4,
                       overflow: 'hidden', textOverflow: 'ellipsis',
                       display: '-webkit-box', WebkitLineClamp: isExpanded ? 6 : 2, WebkitBoxOrient: 'vertical',
                     }}>
                       {act.task}
                     </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 6 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 5 }}>
                       <span style={{
-                        fontSize: 9, padding: '1px 6px', borderRadius: 4, fontWeight: 700, fontFamily: 'Fira Code, monospace',
+                        fontSize: 8, padding: '1px 5px', borderRadius: 3, fontWeight: 700, fontFamily: 'Fira Code, monospace',
                         background: (MODEL_COLORS[act.model] || MODEL_COLORS.local) + '22',
                         color: MODEL_COLORS[act.model] || MODEL_COLORS.local,
                       }}>{act.model}</span>
-                      <span style={{ fontSize: 10, color: 'var(--text-muted)', fontFamily: 'Fira Code, monospace' }}>{act.runtime}</span>
-                      <span style={{ fontSize: 10, color: 'var(--text-muted)', marginLeft: 'auto' }}>
+                      <span style={{ fontSize: 9, color: 'var(--text-muted)', fontFamily: 'Fira Code, monospace' }}>{act.runtime}</span>
+                      <span style={{ fontSize: 9, color: 'var(--text-muted)', marginLeft: 'auto' }}>
                         {new Date(act.startedAt).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false })}
                       </span>
                     </div>
@@ -601,7 +586,7 @@ export default function MissionControl() {
               })
             )}
           </div>
-        )}
+        </div>
       </div>
 
       {/* Animations */}
