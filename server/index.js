@@ -33,6 +33,7 @@ app.use(require('./middleware/auth'));
 // ── Routes ──
 app.use(require('./routes/system'));
 app.use(require('./routes/tasks'));
+app.use(require('./routes/projects'));
 app.use(require('./routes/agents'));
 app.use(require('./routes/matches'));
 app.use(require('./routes/youtube'));

@@ -22,7 +22,11 @@ async function writeTasks(data) {
 
 router.get('/api/tasks', async (req, res) => {
   const data = await readTasks();
-  const sorted = data.tasks.sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
+  let filtered = data.tasks;
+  if (req.query.project) {
+    filtered = filtered.filter(t => t.project === req.query.project);
+  }
+  const sorted = filtered.sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
   res.json({ ok: true, tasks: sorted });
 });
 
@@ -46,6 +50,7 @@ router.post('/api/tasks', async (req, res) => {
     assignedTo: assignedTo || '', model, createdAt: now, updatedAt: now,
     completedAt: null, sessionId: null, result: null, rounds: 0,
     source: source || 'dashboard', priority: priority || 'medium',
+    project: req.body.project || null,
     parentTaskId: req.body.parentTaskId || null,
     pipelineRound: req.body.pipelineRound || 0,
   };
@@ -78,7 +83,7 @@ router.post('/api/tasks/archive', async (req, res) => {
   res.json({ ok: true, archived: doneTasks.length, summary });
 });
 
-const ALLOWED_FIELDS = ['status', 'assignedTo', 'result', 'sessionId', 'rounds', 'priority', 'title', 'description', 'model', 'parentTaskId', 'pipelineRound'];
+const ALLOWED_FIELDS = ['status', 'assignedTo', 'result', 'sessionId', 'rounds', 'priority', 'title', 'description', 'model', 'parentTaskId', 'pipelineRound', 'project'];
 
 async function updateTask(req, res) {
   const id = parseInt(req.params.id);

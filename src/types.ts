@@ -49,6 +49,7 @@ export interface Task {
   priority: 'low' | 'medium' | 'high';
   parentTaskId: number | null;
   pipelineRound: number;
+  project: string | null;
 }
 
 export interface SchedulerStatus {
@@ -100,4 +101,13 @@ export interface RoleInfo {
   name: string;
   icon: string;
   model: string;
+}
+
+export interface Project {
+  id: string;
+  name: string;
+  icon: string;
+  color: string;
+  techStack: string;
+  repoPath: string;
 }

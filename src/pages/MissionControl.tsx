@@ -1,5 +1,5 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
-import { getAgents, getActivity, getPipelineStatus, getTasks, createTask, updateTask, patchTask, deleteTaskApi, getModelRoles, getSchedulerStatus } from '../api';
+import { getAgents, getActivity, getPipelineStatus, getTasks, createTask, updateTask, patchTask, deleteTaskApi, getModelRoles, getSchedulerStatus, getProjects } from '../api';
 import { Radio, ListTodo, Plus, Activity, CheckCircle, XCircle, Trash2, Search, Edit3, AlertTriangle, RefreshCw } from 'lucide-react';
 import { timeAgo, getModelTier } from '../utils';
 import { usePolling } from '../hooks/usePolling';
@@ -9,7 +9,7 @@ import ConfirmDialog from '../components/ConfirmDialog';
 import LoadingSkeleton from '../components/LoadingSkeleton';
 import KeyboardShortcuts from '../components/KeyboardShortcuts';
 import { Zap } from 'lucide-react';
-import type { Task, Activity as ActivityType, MissionAgent, RoleInfo, PipelineStatus, SchedulerStatus } from '../types';
+import type { Task, Activity as ActivityType, MissionAgent, RoleInfo, PipelineStatus, SchedulerStatus, Project } from '../types';
 
 const COLUMNS: { id: Task['status']; label: string }[] = [
   { id: 'inbox', label: 'INBOX' },
@@ -33,9 +33,11 @@ export default function MissionControl() {
   const [activities, setActivities] = useState<ActivityType[]>([]);
   const [pipeline, setPipeline] = useState<PipelineStatus>({ active: false, stage: null, task: null, rounds: 0 });
   const [schedulerStatus, setSchedulerStatus] = useState<SchedulerStatus>({ running: false, lastCheck: null, busyAgents: [], pendingTasks: 0, queuedSpawns: [] });
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [activeProject, setActiveProject] = useState<string | null>(null);
   const [showAdd, setShowAdd] = useState(false);
   const [stats, setStats] = useState({ agents: 0, tasks: 0, running: 0 });
-  const [newTask, setNewTask] = useState<{ title: string; description: string; assignedTo: string; priority: 'high' | 'medium' | 'low' }>({ title: '', description: '', assignedTo: '', priority: 'medium' });
+  const [newTask, setNewTask] = useState<{ title: string; description: string; assignedTo: string; priority: 'high' | 'medium' | 'low'; project: string }>({ title: '', description: '', assignedTo: '', priority: 'medium', project: '' });
   const [dragTask, setDragTask] = useState<number | null>(null);
   const [expandedActivity, setExpandedActivity] = useState<string | null>(null);
   const [workingAgents, setWorkingAgents] = useState<Set<string>>(new Set());
@@ -48,7 +50,7 @@ export default function MissionControl() {
 
   // Edit modal
   const [editTask, setEditTask] = useState<Task | null>(null);
-  const [editForm, setEditForm] = useState({ title: '', description: '', assignedTo: '', priority: 'medium' as 'high' | 'medium' | 'low' });
+  const [editForm, setEditForm] = useState({ title: '', description: '', assignedTo: '', priority: 'medium' as 'high' | 'medium' | 'low', project: '' });
 
   // Delete confirmation
   const [deleteTaskId, setDeleteTaskId] = useState<number | null>(null);
@@ -85,7 +87,13 @@ export default function MissionControl() {
     }).catch(() => {});
   }, []);
 
-  usePolling(() => Promise.all([fetchTasks(), fetchActivity(), fetchPipeline(), fetchScheduler()]).then(() => null), 10000);
+  const fetchProjects = useCallback(() => {
+    return getProjects().then((data: { projects?: Project[] }) => {
+      setProjects(data.projects || []);
+    }).catch(() => {});
+  }, []);
+
+  usePolling(() => Promise.all([fetchTasks(), fetchActivity(), fetchPipeline(), fetchScheduler(), fetchProjects()]).then(() => null), 10000);
 
   useEffect(() => {
     Promise.all([
@@ -108,8 +116,9 @@ export default function MissionControl() {
       fetchActivity(),
       fetchPipeline(),
       fetchScheduler(),
+      fetchProjects(),
     ]).catch(() => {}).finally(() => setLoading(false));
-  }, [fetchTasks, fetchActivity, fetchPipeline, fetchScheduler]);
+  }, [fetchTasks, fetchActivity, fetchPipeline, fetchScheduler, fetchProjects]);
 
   useEffect(() => {
     setStats(prev => ({ ...prev, tasks: tasks.length }));
@@ -151,10 +160,11 @@ export default function MissionControl() {
       description: newTask.description,
       assignedTo: newTask.assignedTo || undefined,
       priority: newTask.priority,
+      project: newTask.project || undefined,
       source: 'dashboard',
     }).then(() => {
       fetchTasks();
-      setNewTask({ title: '', description: '', assignedTo: '', priority: 'medium' });
+      setNewTask({ title: '', description: '', assignedTo: '', priority: 'medium', project: activeProject || '' });
       setShowAdd(false);
       showToast('Task created', 'success');
     }).catch(() => { showToast('Failed to create task', 'error'); });
@@ -175,7 +185,7 @@ export default function MissionControl() {
 
   const openEditModal = (task: Task) => {
     setEditTask(task);
-    setEditForm({ title: task.title, description: task.description || '', assignedTo: task.assignedTo || '', priority: task.priority });
+    setEditForm({ title: task.title, description: task.description || '', assignedTo: task.assignedTo || '', priority: task.priority, project: task.project || '' });
   };
 
   const saveEdit = () => {
@@ -185,6 +195,7 @@ export default function MissionControl() {
       description: editForm.description,
       assignedTo: editForm.assignedTo || undefined,
       priority: editForm.priority,
+      project: editForm.project || null,
     }).then(() => {
       fetchTasks();
       setEditTask(null);
@@ -194,6 +205,7 @@ export default function MissionControl() {
 
   // Filtering
   const filteredTasks = tasks.filter(t => {
+    if (activeProject && t.project !== activeProject) return false;
     if (searchQuery) {
       const q = searchQuery.toLowerCase();
       if (!t.title.toLowerCase().includes(q) && !(t.description || '').toLowerCase().includes(q)) return false;
@@ -320,7 +332,7 @@ export default function MissionControl() {
               <span style={{ fontSize: 9, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 0.5 }}>Tasks</span>
             </div>
           </div>
-          <button onClick={() => setShowAdd(true)} style={{
+          <button onClick={() => { setNewTask(prev => ({ ...prev, project: activeProject || '' })); setShowAdd(true); }} style={{
             padding: '8px 16px', background: 'var(--accent)', color: 'white',
             border: 'none', borderRadius: 8, cursor: 'pointer', fontSize: 13,
             display: 'flex', alignItems: 'center', gap: 6, fontFamily: 'Fira Sans, sans-serif',
@@ -329,6 +341,36 @@ export default function MissionControl() {
           </button>
         </div>
       </div>
+
+      {/* Project Tabs */}
+      {projects.length > 0 && (
+        <div style={{
+          padding: '6px 16px', borderBottom: '1px solid var(--border)',
+          display: 'flex', alignItems: 'center', gap: 6, background: 'var(--bg-card)', flexShrink: 0,
+          overflowX: 'auto',
+        }}>
+          <button onClick={() => setActiveProject(null)} style={{
+            padding: '5px 12px', fontSize: 12, fontWeight: 600, border: 'none', borderRadius: 6,
+            cursor: 'pointer', fontFamily: 'Fira Sans, sans-serif',
+            background: activeProject === null ? 'var(--accent)' : 'transparent',
+            color: activeProject === null ? 'white' : 'var(--text-muted)',
+            transition: 'background 0.15s',
+          }}>All Projects</button>
+          {projects.map(p => (
+            <button key={p.id} onClick={() => setActiveProject(activeProject === p.id ? null : p.id)} style={{
+              padding: '5px 12px', fontSize: 12, fontWeight: 600, border: 'none', borderRadius: 6,
+              cursor: 'pointer', fontFamily: 'Fira Sans, sans-serif',
+              background: activeProject === p.id ? p.color + '22' : 'transparent',
+              color: activeProject === p.id ? p.color : 'var(--text-muted)',
+              display: 'flex', alignItems: 'center', gap: 5, transition: 'background 0.15s',
+            }}>
+              <span style={{ width: 8, height: 8, borderRadius: '50%', background: p.color, flexShrink: 0 }} />
+              <span>{p.icon}</span>
+              <span>{p.name}</span>
+            </button>
+          ))}
+        </div>
+      )}
 
       {/* Search & Filter Bar + Agent Indicators */}
       <div className="mc-filter-bar" style={{
@@ -490,9 +532,16 @@ export default function MissionControl() {
                         )}
                       </div>
 
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 8 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 8, flexWrap: 'wrap' }}>
                         <PriorityBadge priority={task.priority} />
                         <span style={{ fontSize: 10 }}>{SOURCE_ICONS[task.source] || '📋'}</span>
+                        {(() => { const proj = projects.find(p => p.id === task.project); return proj ? (
+                          <span style={{
+                            fontSize: 9, padding: '1px 6px', borderRadius: 4, fontWeight: 700, fontFamily: 'Fira Code, monospace',
+                            background: proj.color + '22', color: proj.color,
+                            display: 'inline-flex', alignItems: 'center', gap: 3,
+                          }}>{proj.icon} {proj.name}</span>
+                        ) : null; })()}
                         <span style={{ fontSize: 10, color: 'var(--text-muted)', fontFamily: 'Fira Code, monospace', marginLeft: 'auto' }}>
                           {timeAgo(task.createdAt)}
                         </span>
@@ -651,6 +700,18 @@ export default function MissionControl() {
                 </select>
               </div>
             </div>
+            {projects.length > 0 && (
+              <div style={{ marginBottom: 14 }}>
+                <label style={{ fontSize: 12, color: 'var(--text-muted)', display: 'block', marginBottom: 4, textTransform: 'uppercase', letterSpacing: 0.5 }}>Project</label>
+                <select value={newTask.project} onChange={e => setNewTask({ ...newTask, project: e.target.value })} style={{
+                  width: '100%', padding: '10px 12px', background: 'var(--bg)', border: '1px solid var(--border)',
+                  borderRadius: 8, color: 'var(--text)', fontSize: 14, outline: 'none', fontFamily: 'Fira Sans, sans-serif',
+                }}>
+                  <option value="">No project</option>
+                  {projects.map(p => <option key={p.id} value={p.id}>{p.icon} {p.name}</option>)}
+                </select>
+              </div>
+            )}
             <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
               <button onClick={() => setShowAdd(false)} style={{
                 padding: '10px 20px', background: 'var(--border)', color: 'var(--text)',
@@ -709,6 +770,18 @@ export default function MissionControl() {
                 </select>
               </div>
             </div>
+            {projects.length > 0 && (
+              <div style={{ marginBottom: 14 }}>
+                <label style={{ fontSize: 12, color: 'var(--text-muted)', display: 'block', marginBottom: 4, textTransform: 'uppercase', letterSpacing: 0.5 }}>Project</label>
+                <select value={editForm.project} onChange={e => setEditForm({ ...editForm, project: e.target.value })} style={{
+                  width: '100%', padding: '10px 12px', background: 'var(--bg)', border: '1px solid var(--border)',
+                  borderRadius: 8, color: 'var(--text)', fontSize: 14, outline: 'none', fontFamily: 'Fira Sans, sans-serif',
+                }}>
+                  <option value="">No project</option>
+                  {projects.map(p => <option key={p.id} value={p.id}>{p.icon} {p.name}</option>)}
+                </select>
+              </div>
+            )}
             <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
               <button onClick={() => setEditTask(null)} style={{
                 padding: '10px 20px', background: 'var(--border)', color: 'var(--text)',

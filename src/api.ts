@@ -84,8 +84,13 @@ export const getUfc = () => api.get('/api/ufc');
 export const getActivity = () => api.get('/api/activity');
 export const getPipelineStatus = () => api.get('/api/pipeline');
 
+// Projects
+export const getProjects = () => api.get('/api/projects');
+export const createProject = (project: Record<string, unknown>) => api.post('/api/projects', project);
+export const deleteProject = (id: string) => api.del(`/api/projects/${id}`);
+
 // Tasks
-export const getTasks = () => api.get('/api/tasks');
+export const getTasks = (project?: string) => api.get(`/api/tasks${project ? `?project=${encodeURIComponent(project)}` : ''}`);
 export const createTask = (task: Record<string, unknown>) => api.post('/api/tasks', task);
 export const updateTask = (id: number, data: Record<string, unknown>) => api.post(`/api/tasks/${id}`, data);
 export const patchTask = (id: number, data: Record<string, unknown>) => api.patch(`/api/tasks/${id}`, data);
