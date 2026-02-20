@@ -44,10 +44,15 @@ app.use(require('./routes/activity'));
 app.use(require('./routes/chat'));
 app.use(require('./routes/scheduler'));
 app.use(require('./routes/plan'));
+app.use(require('./routes/trello'));
 
 // ── Start scheduler ──
 const scheduler = require('./scheduler');
 scheduler.start();
+
+// ── Start Trello poller ──
+const trelloPoller = require('./trello-poller');
+trelloPoller.start();
 
 // ── Global error handler ──
 app.use((err, req, res, next) => {
