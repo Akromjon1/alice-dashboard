@@ -3,7 +3,7 @@ import { getPlan, savePlan, createTask } from '../api';
 import { usePolling } from '../hooks/usePolling';
 import { useToast } from '../contexts/ToastContext';
 import LoadingSkeleton from '../components/LoadingSkeleton';
-import { ChevronLeft, ChevronRight, ChevronDown, ChevronUp, Plus, ArrowRight, Check, ClipboardList } from 'lucide-react';
+import { ChevronLeft, ChevronRight, ChevronDown, Plus, ArrowRight, Check, ClipboardList } from 'lucide-react';
 import type { Plan as PlanType, PlanSection } from '../types';
 
 function getTashkentDate(): string {
