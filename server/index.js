@@ -43,6 +43,7 @@ app.use(require('./routes/model-roles'));
 app.use(require('./routes/activity'));
 app.use(require('./routes/chat'));
 app.use(require('./routes/scheduler'));
+app.use(require('./routes/plan'));
 
 // ── Start scheduler ──
 const scheduler = require('./scheduler');

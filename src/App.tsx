@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { isConfigured } from './api';
-import { LayoutDashboard, Bot, Puzzle, Settings as SettingsIcon, Sun, Moon, Youtube, Crosshair, Trophy, Clock, HelpCircle } from 'lucide-react';
+import { LayoutDashboard, Bot, Puzzle, Settings as SettingsIcon, Sun, Moon, Youtube, Crosshair, Trophy, Clock, HelpCircle, ClipboardList } from 'lucide-react';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
 import MissionControl from './pages/MissionControl';
@@ -10,9 +10,10 @@ import Settings from './pages/Settings';
 import YouTubePage from './pages/YouTube';
 import Matches from './pages/Matches';
 import CronJobs from './pages/CronJobs';
+import PlanPage from './pages/Plan';
 import KeyboardShortcuts from './pages/KeyboardShortcuts';
 
-type Page = 'mission' | 'dashboard' | 'agents' | 'matches' | 'youtube' | 'cron' | 'skills' | 'settings';
+type Page = 'mission' | 'plan' | 'dashboard' | 'agents' | 'matches' | 'youtube' | 'cron' | 'skills' | 'settings';
 
 export default function App() {
   const [loggedIn, setLoggedIn] = useState(isConfigured());
@@ -55,6 +56,7 @@ export default function App() {
 
   const nav = [
     { id: 'mission' as Page, label: 'Mission Control', icon: Crosshair },
+    { id: 'plan' as Page, label: 'Daily Plan', icon: ClipboardList },
     { id: 'dashboard' as Page, label: 'System', icon: LayoutDashboard },
     { id: 'agents' as Page, label: 'Agents', icon: Bot },
     { id: 'matches' as Page, label: 'Matches', icon: Trophy },
@@ -67,6 +69,7 @@ export default function App() {
   const renderPage = () => {
     switch (page) {
       case 'mission': return <MissionControl />;
+      case 'plan': return <PlanPage />;
       case 'dashboard': return <Dashboard />;
       case 'agents': return <Agents />;
       case 'matches': return <Matches />;

@@ -102,3 +102,8 @@ export const getModelRoles = () => api.get('/api/model-roles');
 // Scheduler
 export const getSchedulerStatus = () => api.get('/api/scheduler/status');
 export const getSchedulerQueue = () => api.get('/api/scheduler/queue');
+
+// Plan
+export const getPlan = (date?: string) => api.get(`/api/plan${date ? `?date=${date}` : ''}`);
+export const savePlan = (date: string, content: string) => api.post('/api/plan', { date, content });
+export const getPlanDates = () => api.get('/api/plan/dates');

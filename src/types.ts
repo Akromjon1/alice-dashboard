@@ -103,6 +103,24 @@ export interface RoleInfo {
   model: string;
 }
 
+export interface PlanItem {
+  id: number;
+  text: string;
+  checked: boolean;
+  section: string;
+}
+
+export interface PlanSection {
+  name: string;
+  items: PlanItem[];
+}
+
+export interface Plan {
+  date: string;
+  title: string;
+  sections: PlanSection[];
+}
+
 export interface Project {
   id: string;
   name: string;
