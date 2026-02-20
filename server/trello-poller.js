@@ -17,7 +17,12 @@ const LIST_MAP = {
   '687f29d7ddfc8f8838db09e5': 'Abror',
 };
 
-const WATCH_LISTS = ['687887806558819fefa195c5', '687889856b72ff707a73b13f']; // To Do, In Progress
+const WATCH_LISTS = [
+  '687887806558819fefa195c7', // 🕹️Product Backlog
+  '687887806558819fefa195c5', // 📌To Do
+  '687889856b72ff707a73b13f', // 🕜In Progress
+  '68ee3e138d775bdedc476c90', // Ready for POS
+];
 
 let lastPoll = null;
 let pollInterval = null;
@@ -69,8 +74,8 @@ async function poll() {
     for (const card of myCards) {
       const listName = LIST_MAP[card.idList] || card.idList;
 
-      // New card not seen before
-      if (!seenSet.has(card.id) && !pendingIds.has(card.id)) {
+      // New card not seen before — only notify if in watched lists
+      if (!seenSet.has(card.id) && !pendingIds.has(card.id) && WATCH_LISTS.includes(card.idList)) {
         pending.push({
           cardId: card.id, name: card.name, list: listName,
           url: card.url, labels: card.labels || [], due: card.due,
