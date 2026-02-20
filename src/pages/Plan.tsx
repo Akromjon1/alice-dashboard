@@ -3,7 +3,7 @@ import { getPlan, savePlan, createTask } from '../api';
 import { usePolling } from '../hooks/usePolling';
 import { useToast } from '../contexts/ToastContext';
 import LoadingSkeleton from '../components/LoadingSkeleton';
-import { ChevronLeft, ChevronRight, ChevronDown, Plus, ArrowRight, Check, ClipboardList } from 'lucide-react';
+import { ChevronLeft, ChevronRight, ChevronDown, Plus, ArrowRight, Check, ClipboardList, Trash2, Pencil } from 'lucide-react';
 import type { Plan as PlanType, PlanSection } from '../types';
 
 function getTashkentDate(): string {
@@ -45,6 +45,8 @@ export default function Plan() {
   const [newSection, setNewSection] = useState('');
   const [showNewSection, setShowNewSection] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [editingItem, setEditingItem] = useState<{ si: number; ii: number } | null>(null);
+  const [editText, setEditText] = useState('');
 
   const fetchPlan = useCallback(() => getPlan(date), [date]);
   const { data, loading, error, refresh } = usePolling<{ ok: boolean; plan: PlanType }>(fetchPlan, 30000);
@@ -94,6 +96,46 @@ export default function Plan() {
     });
     setNewItems(prev => ({ ...prev, [sectionName]: '' }));
     save(updated);
+  };
+
+  const deleteItem = (sectionIdx: number, itemIdx: number) => {
+    if (!plan) return;
+    const updated = structuredClone(plan);
+    updated.sections[sectionIdx].items.splice(itemIdx, 1);
+    save(updated);
+  };
+
+  const deleteSection = (sectionIdx: number) => {
+    if (!plan) return;
+    const section = plan.sections[sectionIdx];
+    if (!window.confirm(`Delete section "${section.name}" and all its items?`)) return;
+    const updated = structuredClone(plan);
+    updated.sections.splice(sectionIdx, 1);
+    save(updated);
+  };
+
+  const startEdit = (si: number, ii: number, text: string) => {
+    setEditingItem({ si, ii });
+    setEditText(text);
+  };
+
+  const saveEdit = () => {
+    if (!plan || !editingItem) return;
+    const trimmed = editText.trim();
+    if (!trimmed) {
+      cancelEdit();
+      return;
+    }
+    const updated = structuredClone(plan);
+    updated.sections[editingItem.si].items[editingItem.ii].text = trimmed;
+    setEditingItem(null);
+    setEditText('');
+    save(updated);
+  };
+
+  const cancelEdit = () => {
+    setEditingItem(null);
+    setEditText('');
   };
 
   const addSection = () => {
@@ -169,71 +211,124 @@ export default function Plan() {
           </button>
         </div>
       ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))',
+          gap: 12,
+        }}>
           {sections.map((section: PlanSection, si: number) => (
             <div key={section.name} className="card" style={{ padding: 0, overflow: 'hidden' }}>
               <div
-                onClick={() => toggleCollapse(section.name)}
                 style={{
                   display: 'flex', alignItems: 'center', justifyContent: 'space-between',
                   padding: '14px 18px', cursor: 'pointer', userSelect: 'none',
                   borderBottom: collapsed[section.name] ? 'none' : '1px solid var(--border)',
                 }}
               >
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <div
+                  onClick={() => toggleCollapse(section.name)}
+                  style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1 }}
+                >
                   {collapsed[section.name] ? <ChevronRight size={16} /> : <ChevronDown size={16} />}
                   <span style={{ fontWeight: 600, fontSize: 15 }}>{section.name}</span>
                   <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
                     {section.items.filter(i => i.checked).length}/{section.items.length}
                   </span>
                 </div>
+                <button
+                  className="btn btn-ghost"
+                  onClick={(e) => { e.stopPropagation(); deleteSection(si); }}
+                  style={{ padding: '4px 6px', opacity: 0.5 }}
+                  title="Delete section"
+                >
+                  <Trash2 size={14} />
+                </button>
               </div>
 
               {!collapsed[section.name] && (
                 <div style={{ padding: '8px 0' }}>
-                  {section.items.map((item, ii) => (
-                    <div
-                      key={item.id}
-                      style={{
-                        display: 'flex', alignItems: 'center', gap: 10,
-                        padding: '8px 18px', transition: 'background 0.15s',
-                      }}
-                      className="plan-item-row"
-                    >
-                      <label style={{ display: 'flex', alignItems: 'center', cursor: 'pointer', flex: 1, gap: 10 }}>
-                        <input
-                          type="checkbox"
-                          checked={item.checked}
-                          onChange={() => toggleCheck(si, ii)}
-                          className="plan-checkbox"
-                        />
-                        <span style={{
-                          textDecoration: item.checked ? 'line-through' : 'none',
-                          color: item.checked ? 'var(--text-secondary)' : 'var(--text-primary)',
-                          transition: 'all 0.2s',
-                          fontSize: 14,
-                        }}>
-                          {item.text}
-                        </span>
-                      </label>
-                      {!item.checked && (
-                        addedToMC.has(item.text) ? (
-                          <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, color: 'var(--green)', fontWeight: 500 }}>
-                            <Check size={12} /> Added
-                          </span>
+                  {section.items.map((item, ii) => {
+                    const isEditing = editingItem?.si === si && editingItem?.ii === ii;
+                    return (
+                      <div
+                        key={item.id}
+                        style={{
+                          display: 'flex', alignItems: 'center', gap: 10,
+                          padding: '8px 18px', transition: 'background 0.15s',
+                        }}
+                        className="plan-item-row"
+                      >
+                        {isEditing ? (
+                          <input
+                            type="text"
+                            className="input"
+                            value={editText}
+                            onChange={e => setEditText(e.target.value)}
+                            onKeyDown={e => {
+                              if (e.key === 'Enter') saveEdit();
+                              if (e.key === 'Escape') cancelEdit();
+                            }}
+                            onBlur={saveEdit}
+                            autoFocus
+                            style={{ flex: 1, padding: '4px 8px', fontSize: 14 }}
+                          />
                         ) : (
-                          <button
-                            className="btn btn-ghost"
-                            onClick={() => addToMissionControl(item.text)}
-                            style={{ padding: '2px 8px', fontSize: 11, opacity: 0.6 }}
-                            title="Add to Mission Control"
-                          >
-                            <ArrowRight size={12} /> MC
-                          </button>
-                        )
-                      )}
-                    </div>
-                  ))}
+                          <>
+                            <label style={{ display: 'flex', alignItems: 'center', cursor: 'pointer', flex: 1, gap: 10 }}>
+                              <input
+                                type="checkbox"
+                                checked={item.checked}
+                                onChange={() => toggleCheck(si, ii)}
+                                className="plan-checkbox"
+                              />
+                              <span style={{
+                                textDecoration: item.checked ? 'line-through' : 'none',
+                                color: item.checked ? 'var(--text-secondary)' : 'var(--text-primary)',
+                                transition: 'all 0.2s',
+                                fontSize: 14,
+                              }}>
+                                {item.text}
+                              </span>
+                            </label>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                              {!item.checked && (
+                                addedToMC.has(item.text) ? (
+                                  <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, color: 'var(--green)', fontWeight: 500 }}>
+                                    <Check size={12} /> Added
+                                  </span>
+                                ) : (
+                                  <button
+                                    className="btn btn-ghost"
+                                    onClick={() => addToMissionControl(item.text)}
+                                    style={{ padding: '2px 8px', fontSize: 11, opacity: 0.6 }}
+                                    title="Add to Mission Control"
+                                  >
+                                    <ArrowRight size={12} /> MC
+                                  </button>
+                                )
+                              )}
+                              <button
+                                className="btn btn-ghost"
+                                onClick={() => startEdit(si, ii, item.text)}
+                                style={{ padding: '2px 4px', opacity: 0.4 }}
+                                title="Edit item"
+                              >
+                                <Pencil size={12} />
+                              </button>
+                              <button
+                                className="btn btn-ghost"
+                                onClick={() => deleteItem(si, ii)}
+                                style={{ padding: '2px 4px', opacity: 0.4 }}
+                                title="Delete item"
+                              >
+                                <Trash2 size={12} />
+                              </button>
+                            </div>
+                          </>
+                        )}
+                      </div>
+                    );
+                  })}
 
                   <div style={{ padding: '8px 18px', display: 'flex', gap: 8 }}>
                     <input
