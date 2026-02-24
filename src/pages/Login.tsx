@@ -32,7 +32,7 @@ export default function Login({ onLogin }: { onLogin: () => void }) {
   return (
     <div className="login-page">
       <form className="login-box" onSubmit={handleSubmit}>
-        <h2>🤖 Alice Dashboard</h2>
+        <h2>🤖 Alice</h2>
         <p>Connect to your Alice API server</p>
 
         {error && <div className="error">{error}</div>}
