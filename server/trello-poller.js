@@ -1,6 +1,6 @@
-const fs = require('fs').promises;
 const path = require('path');
 const { DATA_DIR } = require('./lib/paths');
+const { readJSON, writeJSON } = require('./lib/safe-json');
 
 const SEEN_PATH = path.join(DATA_DIR, 'trello-seen.json');
 const PENDING_PATH = path.join(DATA_DIR, 'trello-pending.json');
@@ -26,14 +26,6 @@ const WATCH_LISTS = [
 
 let lastPoll = null;
 let pollInterval = null;
-
-async function readJSON(p, fallback) {
-  try { return JSON.parse(await fs.readFile(p, 'utf8')); } catch { return fallback; }
-}
-async function writeJSON(p, data) {
-  await fs.mkdir(path.dirname(p), { recursive: true });
-  await fs.writeFile(p, JSON.stringify(data, null, 2));
-}
 
 async function fetchCards() {
   const { TRELLO_API_KEY, TRELLO_TOKEN, TRELLO_BOARD_ID } = process.env;
@@ -134,5 +126,5 @@ module.exports = {
     };
   },
   SEEN_PATH, PENDING_PATH,
-  readJSON, writeJSON,
+
 };

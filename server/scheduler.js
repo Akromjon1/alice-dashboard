@@ -1,23 +1,11 @@
-const fs = require('fs').promises;
 const { TASKS_PATH, MODEL_ROLES_PATH } = require('./lib/paths');
+const { readJSON, writeJSON } = require('./lib/safe-json');
 
 const state = {
   running: false,
   lastCheck: null,
   intervalId: null,
 };
-
-async function readJSON(filePath) {
-  try {
-    return JSON.parse(await fs.readFile(filePath, 'utf8'));
-  } catch {
-    return null;
-  }
-}
-
-async function writeTasks(data) {
-  await fs.writeFile(TASKS_PATH, JSON.stringify(data, null, 2));
-}
 
 // Auto-assign agent based on task title/description keywords
 function autoAssign(task, roles) {
@@ -97,7 +85,7 @@ async function tick() {
     }
 
     if (changed) {
-      await writeTasks(data);
+      await writeJSON(TASKS_PATH, data);
     }
   } catch (err) {
     console.error('[scheduler] tick error:', err.message);
@@ -197,7 +185,7 @@ async function handleCompletion(taskId, result, status) {
     }
   }
 
-  await writeTasks(data);
+  await writeJSON(TASKS_PATH, data);
   return task;
 }
 

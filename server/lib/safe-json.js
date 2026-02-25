@@ -90,4 +90,20 @@ async function withJsonFile(filePath, fn, opts = {}) {
   }
 }
 
-module.exports = { withJsonFile };
+/**
+ * Simple read — returns parsed JSON or defaultValue on error.
+ * Uses mutex to prevent torn reads during concurrent writes.
+ */
+async function readJSON(filePath, defaultValue = null) {
+  return withJsonFile(filePath, (data) => data, { defaultValue });
+}
+
+/**
+ * Simple write — serializes data to JSON with atomic write.
+ * Uses mutex to prevent concurrent write races.
+ */
+async function writeJSON(filePath, data) {
+  return withJsonFile(filePath, () => data, { write: true });
+}
+
+module.exports = { withJsonFile, readJSON, writeJSON };

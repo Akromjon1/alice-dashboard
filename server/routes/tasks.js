@@ -1,27 +1,11 @@
 const router = require('express').Router();
-const fs = require('fs').promises;
-const fsSync = require('fs');
 const path = require('path');
 const { TASKS_PATH, MODEL_ROLES_PATH } = require('../lib/paths');
 const { validate } = require('../lib/validate');
-
-async function readTasks() {
-  try {
-    const raw = await fs.readFile(TASKS_PATH, 'utf8');
-    return JSON.parse(raw);
-  } catch {
-    return { tasks: [], nextId: 1 };
-  }
-}
-
-async function writeTasks(data) {
-  const dir = path.dirname(TASKS_PATH);
-  await fs.mkdir(dir, { recursive: true });
-  await fs.writeFile(TASKS_PATH, JSON.stringify(data, null, 2));
-}
+const { readJSON, writeJSON } = require('../lib/safe-json');
 
 router.get('/api/tasks', async (req, res) => {
-  const data = await readTasks();
+  const data = await readJSON(TASKS_PATH, { tasks: [], nextId: 1 });
   let filtered = data.tasks;
   if (req.query.project) {
     filtered = filtered.filter(t => t.project === req.query.project);
@@ -35,11 +19,12 @@ router.post('/api/tasks', async (req, res) => {
   if (err) return res.status(400).json({ error: err });
 
   const { title, description, assignedTo, priority, source } = req.body;
-  const data = await readTasks();
+  const data = await readJSON(TASKS_PATH, { tasks: [], nextId: 1 });
 
   let model = '';
   try {
-    const roles = JSON.parse(await fs.readFile(MODEL_ROLES_PATH, 'utf8')).roles || [];
+    const rolesData = await readJSON(MODEL_ROLES_PATH, { roles: [] });
+    const roles = rolesData.roles || [];
     const role = roles.find(r => r.id === assignedTo);
     if (role) model = role.model;
   } catch {}
@@ -55,13 +40,13 @@ router.post('/api/tasks', async (req, res) => {
     pipelineRound: req.body.pipelineRound || 0,
   };
   data.tasks.push(task);
-  await writeTasks(data);
+  await writeJSON(TASKS_PATH, data);
   res.json({ ok: true, task });
 });
 
 // Archive done tasks — returns summary and removes them (MUST be before :id routes)
 router.post('/api/tasks/archive', async (req, res) => {
-  const data = await readTasks();
+  const data = await readJSON(TASKS_PATH, { tasks: [], nextId: 1 });
   const doneTasks = data.tasks.filter(t => t.status === 'done' || t.status === 'failed');
   if (doneTasks.length === 0) return res.json({ ok: true, archived: 0, summary: 'No completed tasks to archive.' });
 
@@ -75,10 +60,10 @@ router.post('/api/tasks/archive', async (req, res) => {
   const summary = `📋 Daily Task Report — ${new Date().toISOString().split('T')[0]}\n\n${lines.join('\n\n')}\n\n📊 Total: ${doneTasks.length} tasks (${doneTasks.filter(t => t.status === 'done').length} passed, ${doneTasks.filter(t => t.status === 'failed').length} failed)`;
 
   data.tasks = data.tasks.filter(t => t.status !== 'done' && t.status !== 'failed');
-  await writeTasks(data);
+  await writeJSON(TASKS_PATH, data);
 
   const archivePath = path.join(path.dirname(TASKS_PATH), `tasks-archive-${new Date().toISOString().split('T')[0]}.json`);
-  await fs.writeFile(archivePath, JSON.stringify(doneTasks, null, 2));
+  await writeJSON(archivePath, doneTasks);
 
   res.json({ ok: true, archived: doneTasks.length, summary });
 });
@@ -88,7 +73,7 @@ const ALLOWED_FIELDS = ['status', 'assignedTo', 'result', 'sessionId', 'rounds',
 async function updateTask(req, res) {
   const id = parseInt(req.params.id);
   if (isNaN(id)) return res.status(400).json({ error: 'Invalid id' });
-  const data = await readTasks();
+  const data = await readJSON(TASKS_PATH, { tasks: [], nextId: 1 });
   const task = data.tasks.find(t => t.id === id);
   if (!task) return res.status(404).json({ error: 'Not found' });
 
@@ -99,7 +84,7 @@ async function updateTask(req, res) {
   if (task.status === 'done' || task.status === 'failed') {
     task.completedAt = task.completedAt || new Date().toISOString();
   }
-  await writeTasks(data);
+  await writeJSON(TASKS_PATH, data);
   res.json({ ok: true, task });
 }
 
@@ -108,33 +93,33 @@ router.post('/api/tasks/:id', updateTask);
 
 router.delete('/api/tasks/:id', async (req, res) => {
   const id = parseInt(req.params.id);
-  const data = await readTasks();
+  const data = await readJSON(TASKS_PATH, { tasks: [], nextId: 1 });
   data.tasks = data.tasks.filter(t => t.id !== id);
-  await writeTasks(data);
+  await writeJSON(TASKS_PATH, data);
   res.json({ ok: true });
 });
 
 router.post('/api/tasks/:id/start', async (req, res) => {
   const id = parseInt(req.params.id);
-  const data = await readTasks();
+  const data = await readJSON(TASKS_PATH, { tasks: [], nextId: 1 });
   const task = data.tasks.find(t => t.id === id);
   if (!task) return res.status(404).json({ error: 'Not found' });
   task.status = 'in_progress';
   task.updatedAt = new Date().toISOString();
-  await writeTasks(data);
+  await writeJSON(TASKS_PATH, data);
   res.json({ ok: true, task });
 });
 
 router.post('/api/tasks/:id/complete', async (req, res) => {
   const id = parseInt(req.params.id);
-  const data = await readTasks();
+  const data = await readJSON(TASKS_PATH, { tasks: [], nextId: 1 });
   const task = data.tasks.find(t => t.id === id);
   if (!task) return res.status(404).json({ error: 'Not found' });
   task.status = 'done';
   task.completedAt = new Date().toISOString();
   task.updatedAt = new Date().toISOString();
   task.result = req.body.result || null;
-  await writeTasks(data);
+  await writeJSON(TASKS_PATH, data);
   res.json({ ok: true, task });
 });
 

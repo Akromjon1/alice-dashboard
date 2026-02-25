@@ -1,18 +1,10 @@
 const router = require('express').Router();
-const fs = require('fs').promises;
 const path = require('path');
 const { TASKS_PATH, DATA_DIR } = require('../lib/paths');
+const { readJSON, writeJSON } = require('../lib/safe-json');
 
 const SEEN_PATH = path.join(DATA_DIR, 'trello-seen.json');
 const PENDING_PATH = path.join(DATA_DIR, 'trello-pending.json');
-
-async function readJSON(p, fallback) {
-  try { return JSON.parse(await fs.readFile(p, 'utf8')); } catch { return fallback; }
-}
-async function writeJSON(p, data) {
-  await fs.mkdir(path.dirname(p), { recursive: true });
-  await fs.writeFile(p, JSON.stringify(data, null, 2));
-}
 
 router.get('/api/trello/pending', async (req, res) => {
   const pending = await readJSON(PENDING_PATH, []);
